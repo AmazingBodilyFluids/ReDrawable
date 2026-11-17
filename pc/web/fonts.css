@@ -13,3 +13,5 @@
 @font-face { font-family:"Work Sans"; font-weight:400; src:url("fonts/WorkSans-400.woff2") format("woff2"); }
 @font-face { font-family:"Work Sans"; font-weight:500; src:url("fonts/WorkSans-500.woff2") format("woff2"); }
 @font-face { font-family:"Work Sans"; font-weight:600; src:url("fonts/WorkSans-600.woff2") format("woff2"); }
+/* EB Garamond, SIL Open Font License 1.1 (fonts/OFL-EB-Garamond.txt): the app's name, as on the splash and the tablet */
+@font-face { font-family:"EB Garamond"; font-weight:400 800; src:url("fonts/EBGaramond-Latin.woff2") format("woff2"); }

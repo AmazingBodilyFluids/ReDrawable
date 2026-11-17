@@ -49,6 +49,7 @@ DEFAULTS = {
     "onboarded": False,
     # window: colour theme (web/themes.css), and whether closing the window keeps the app in the tray
     "theme": "intaglio", "close_to_tray": True,
+    "splash": "slab",  # the opening animation (web/splash.html): slab | snap
     # hold-to-snap shapes
     "snap": True, "snap_hold_ms": 600, "snap_apps": ", ".join(shapes.DRAWING_APPS),
     # tablet-screen side panels with shortcut buttons: left | right | both | off; each folds on its own
@@ -59,7 +60,7 @@ DEFAULTS = {
     "panel_buttons": None,  # filled from DEFAULT_BUTTONS below; always the active profile's buttons
     "panel_buttons_right": None,  # the same for the right-hand panel (DEFAULT_BUTTONS_RIGHT)
     # named button sets, cycled with the arrows on the tablet panel: [{"name", "buttons"}]
-    "panel_profiles": None, "panel_profile": 0,
+    "panel_profiles": None, "panel_profile": 0, "presets_version": 0,
     # the tablet screen under the ink: paper pattern, a tracing image
     "paper": "plain", "paper_mm": 5.0,
     "trace_file": "", "trace_opacity": 0.5, "trace_scale": 1.0, "trace_x": 0.0, "trace_y": 0.0,
@@ -72,11 +73,14 @@ DEFAULTS = {
     # down, "gate" needs a firmer press). Made from an image and placed in the desktop app.
     "mask": "", "mask_on": False, "mask_mode": "fade",
     "mask_contrast": 1.0,   # applied over the stored mask: >1 pushes greys towards black / white
+    "mask_strength": 1.0,   # how strongly grey holds the pen back, either mode: 0 = not at all, 2 = twice as much
     "mask_invert": False,   # black and white swapped, also over the stored mask (a toggle on the tablet too)
     # the mask library: [{"id", "name", "contrast", "mode", "invert"}], one file each (penmask-<id>.bin); the
     # active one is what the pen and the tablet use (mask_contrast / mask_mode / mask_invert mirror it),
     # and the tablet lists them in a strip on the side away from the shortcut panel
     "masks": None, "mask_active": "", "mask_panel": True,
+    # what the desktop preview draws of the pen besides its position: line width by pressure, tilt, hover path
+    "view_pressure": True, "view_tilt": True, "view_hover": True,
     "mask_side": "right",      # which side of the tablet the strip is on, inside a panel on that side
     "mask_strip_open": False,  # the strip folds away to a corner tab; picking a mask folds it again
     "swipe_step": 100,      # three-finger swipe: tablet pixels of drag per undo / redo step (~11 mm)
@@ -114,6 +118,56 @@ DEFAULT_BUTTONS_RIGHT = [
     {"t": "Move image", "kind": "trace", "keys": ""}, {"t": "Light", "kind": "light", "keys": ""},
 ]
 DEFAULTS["panel_buttons_right"] = DEFAULT_BUTTONS_RIGHT
+
+
+def _b(t, keys="", kind="shortcut"):
+    return {"t": t, "kind": kind, "keys": keys}
+
+
+# Built-in Photoshop presets, one per kind of work, both panels each. Menu and tool keys were
+# checked against Photoshop 2026 (27.10)'s own factory set, "Default Keyboard Shortcuts.kys"
+# (Locales\en_US\Support Files\Shortcuts\Win). The type keys marked (text) only act while
+# editing text and aren't in that file, so they're Photoshop's long-standing text keys, unchecked.
+PRESETS = [
+    {"name": "Photography",
+     "buttons": [_b("Undo", "ctrl+z"), _b("Redo", "ctrl+shift+z"), _b("Size -", "["), _b("Size +", "]"),
+                 _b("Brush", "b"), _b("Eraser", "e"), _b("Heal", "j"), _b("Clone", "s"),
+                 _b("Dodge/Burn", "o"), _b("Crop", "c"), _b("Hand", "space", "hold"), _b("Sample", "alt", "hold"),
+                 _b("Zoom -", "ctrl+-"), _b("Zoom +", "ctrl+="), _b("Fit", "ctrl+0"), _b("Pen", kind="pen")],
+     "buttons_right": [_b("Levels", "ctrl+l"), _b("Curves", "ctrl+m"), _b("Hue/Sat", "ctrl+u"), _b("Colour bal", "ctrl+b"),
+                       _b("B & W", "ctrl+shift+alt+b"), _b("Camera Raw", "ctrl+shift+a"), _b("Liquify", "ctrl+shift+x"), _b("Layer copy", "ctrl+j"),
+                       _b("Quick sel", "w"), _b("Sel & mask", "ctrl+alt+r"), _b("Deselect", "ctrl+d"), _b("Invert sel", "ctrl+shift+i"),
+                       _b("Transform", "ctrl+t"), _b("100%", "ctrl+1"), _b("Move image", kind="trace"), _b("Save", "ctrl+s")]},
+    {"name": "Typography",
+     "buttons": [_b("Undo", "ctrl+z"), _b("Redo", "ctrl+shift+z"), _b("Type", "t"), _b("Move", "v"),
+                 _b("Bold", "ctrl+shift+b"), _b("Italic", "ctrl+shift+i"), _b("Text -", "ctrl+shift+,"), _b("Text +", "ctrl+shift+."),
+                 _b("Track -", "alt+left"), _b("Track +", "alt+right"), _b("Align left", "ctrl+shift+l"), _b("Centre", "ctrl+shift+c"),
+                 _b("Align right", "ctrl+shift+r"), _b("All caps", "ctrl+shift+k"), _b("Commit", "ctrl+enter"), _b("Pen", kind="pen")],
+     "buttons_right": [_b("Hand", "space", "hold"), _b("Zoom -", "ctrl+-"), _b("Zoom +", "ctrl+="), _b("Fit", "ctrl+0"),
+                       _b("Transform", "ctrl+t"), _b("Deselect", "ctrl+d"), _b("Layer copy", "ctrl+j"), _b("Group", "ctrl+g"),
+                       _b("Clip mask", "ctrl+alt+g"), _b("Forward", "ctrl+]"), _b("Backward", "ctrl+["), _b("Rulers", "ctrl+r"),
+                       _b("Grid", "ctrl+'"), _b("Extras", "ctrl+h"), _b("Export as", "ctrl+shift+alt+w"), _b("Save", "ctrl+s")]},
+    {"name": "Design",
+     "buttons": [_b("Undo", "ctrl+z"), _b("Redo", "ctrl+shift+z"), _b("Move", "v"), _b("Marquee", "m"),
+                 _b("Pen tool", "p"), _b("Path sel", "a"), _b("Shape", "u"), _b("Type", "t"),
+                 _b("Eyedropper", "i"), _b("Gradient", "g"), _b("Hand", "space", "hold"), _b("Transform", "ctrl+t"),
+                 _b("Zoom -", "ctrl+-"), _b("Zoom +", "ctrl+="), _b("Fit", "ctrl+0"), _b("Pen", kind="pen")],
+     "buttons_right": [_b("New layer", "ctrl+shift+n"), _b("Layer copy", "ctrl+j"), _b("Group", "ctrl+g"), _b("Ungroup", "ctrl+shift+g"),
+                       _b("Merge", "ctrl+e"), _b("Clip mask", "ctrl+alt+g"), _b("Forward", "ctrl+]"), _b("Backward", "ctrl+["),
+                       _b("Deselect", "ctrl+d"), _b("Invert sel", "ctrl+shift+i"), _b("Rulers", "ctrl+r"), _b("Grid", "ctrl+'"),
+                       _b("Extras", "ctrl+h"), _b("Export as", "ctrl+shift+alt+w"), _b("Save", "ctrl+s"), _b("Shapes", kind="snap")]},
+    {"name": "Art",
+     "buttons": [_b("Undo", "ctrl+z"), _b("Redo", "ctrl+shift+z"), _b("Size -", "["), _b("Size +", "]"),
+                 _b("Brush", "b"), _b("Eraser", "e"), _b("Hand", "space", "hold"), _b("Pick", "alt", "hold"),
+                 _b("Ctrl", "ctrl", "hold"), _b("Shift", "shift", "hold"), _b("Zoom -", "ctrl+-"), _b("Zoom +", "ctrl+="),
+                 _b("Fit", "ctrl+0"), _b("Shapes", kind="snap"), _b("Pen", kind="pen"), _b("Save", "ctrl+s")],
+     "buttons_right": [_b("Lasso", "l"), _b("Move", "v"), _b("Transform", "ctrl+t"), _b("Deselect", "ctrl+d"),
+                       _b("Swap col", "x"), _b("Reset col", "d"), _b("Fill tool", "g"), _b("New layer", "ctrl+shift+n"),
+                       _b("Merge", "ctrl+e"), _b("Clip mask", "ctrl+alt+g"), _b("Liquify", "ctrl+shift+x"), _b("Hue/Sat", "ctrl+u"),
+                       _b("Rotate", "r", "hold"), _b("Quick mask", "q"), _b("Move image", kind="trace"), _b("Light", kind="light")]},
+]
+PRESETS_VERSION = 1  # bump when PRESETS gains a preset that existing settings should get too
+
 PANEL_SIDES = ("left", "right", "both", "off")
 # Tap gestures on the drawing area: "fingers x taps" -> title and keys ("" = nothing).
 # Ctrl+Shift+Alt+N is Photoshop's "new layer" without the dialog.
@@ -124,7 +178,7 @@ DEFAULT_TAPS = {"1x2": {"t": "", "keys": ""}, "1x3": {"t": "New layer", "keys": 
                 "2x1": {"t": "", "keys": ""}, "2x2": {"t": "", "keys": ""}, "3x1": {"t": "", "keys": ""},
                 "5x2": {"t": "Reset rotation", "keys": "r+esc"}}
 DEFAULTS["taps"] = DEFAULT_TAPS
-MASK_KEYS = {"mask_contrast": "contrast", "mask_mode": "mode", "mask_invert": "invert"}  # cfg -> the active mask's entry
+MASK_KEYS = {"mask_contrast": "contrast", "mask_mode": "mode", "mask_invert": "invert", "mask_strength": "strength"}  # cfg -> the active mask's entry
 BUTTON_KINDS = ("shortcut", "hold", "pen", "snap", "clear", "trace", "light", "mask", "none")
 MASK_N = penmask.N
 # fingers: "shortcuts" turns gestures into keys (pan = Space+drag ...); "windows" hands every
@@ -148,13 +202,27 @@ def clean_profiles(profiles, current=None):
         touch = p.get("touch") if p.get("touch") in TOUCH_MODES else "shortcuts"
         out.append({"name": name, "buttons": clean_buttons(p.get("buttons")),
                     "buttons_right": clean_buttons(p.get("buttons_right") or DEFAULT_BUTTONS_RIGHT), "touch": touch})
-    return out or [{"name": "Photoshop", "buttons": clean_buttons(current or DEFAULT_BUTTONS),
-                    "buttons_right": clean_buttons(DEFAULT_BUTTONS_RIGHT), "touch": "shortcuts"}]
+    if out:
+        return out
+    if current:  # settings from before profiles: that layout comes first
+        out.append({"name": "Photoshop", "buttons": clean_buttons(current),
+                    "buttons_right": clean_buttons(DEFAULT_BUTTONS_RIGHT), "touch": "shortcuts"})
+    return out + preset_profiles()
+
+
+def preset_profiles(skip=()):
+    """The built-in presets as profiles, leaving out any whose name is already taken."""
+    taken = {n.lower() for n in skip}
+    return [{"name": p["name"], "buttons": clean_buttons(p["buttons"]), "buttons_right": clean_buttons(p["buttons_right"]),
+             "touch": "shortcuts"} for p in PRESETS if p["name"].lower() not in taken]
 
 
 def load_profiles(cfg):
     """Settings from before profiles had one layout: it becomes the first profile."""
     cfg["panel_profiles"] = clean_profiles(cfg.get("panel_profiles"), cfg.get("panel_buttons"))
+    if int(cfg.get("presets_version") or 0) < PRESETS_VERSION:  # existing profiles stay; new presets join after them
+        cfg["panel_profiles"] += preset_profiles(p["name"] for p in cfg["panel_profiles"])
+        cfg["presets_version"] = PRESETS_VERSION
     cfg["panel_profile"] = max(0, min(int(cfg.get("panel_profile") or 0), len(cfg["panel_profiles"]) - 1))
     cfg["panel_buttons"] = cfg["panel_profiles"][cfg["panel_profile"]]["buttons"]
     cfg["panel_buttons_right"] = cfg["panel_profiles"][cfg["panel_profile"]]["buttons_right"]
@@ -210,7 +278,7 @@ APP_KEY = paths.app_key()
 
 
 def use_profile_config():
-    """Keep settings and calibration in the user profile (%APPDATA%\\PaperTablet), not next to
+    """Keep settings and calibration in the user profile (%APPDATA%\\ReDrawable), not next to
     the code, so a new copy of the app keeps them; in a portable copy, in its own data folder
     (see paths.py). On first run an older rmtablet.json next to this file is carried over."""
     target = os.path.join(paths.data_dir(), "rmtablet.json")
@@ -519,6 +587,8 @@ class Worker(threading.Thread):
         super().__init__(daemon=True)
         self.e = engine
         self.latest = None
+        self.trail = collections.deque(maxlen=3000)  # (number, report) for the page's ink trail
+        self.n = 0
         self.stop_flag = threading.Event()
         self.translator = None
         self.snapper = None
@@ -588,6 +658,8 @@ class Worker(threading.Thread):
                 now = time.monotonic()
                 for s in parser.feed(chunk):
                     self.latest = s
+                    self.n += 1
+                    self.trail.append((self.n, s))
                     if s.in_range and s.t:
                         e.rate.add(s.t, now)
                     down = s.in_range and (s.touch or s.pressure > 0)
@@ -694,6 +766,9 @@ class Engine:
         self.pan_space = False
         self.last_action = None
         self.touch = None       # the latest finger report from the tablet, for the live view
+        self.gestures_seen = collections.deque(maxlen=64)  # [n, time, text]: what the sample image on Panel & gestures acts out
+        self.gestures_n = 0
+        self.trail_seen = 0     # the last pen report the page has had
         self.touch_out = None   # WindowsTouch, made when a profile first uses Windows touch
         self.load_masks()
         self.rate = RateMeter()
@@ -754,7 +829,7 @@ class Engine:
             "snap_last": self.snap_last, "last_action": self.last_action, "held_keys": sorted(self.keys.held),
             "view": self.view_size(), "panel_px": PANEL_PX, "tab_px": TAB_PX,
             "key_names": sorted(keys.VK), "key_labels": keys.LABEL, "default_buttons": DEFAULT_BUTTONS,
-            "default_buttons_right": DEFAULT_BUTTONS_RIGHT,
+            "default_buttons_right": DEFAULT_BUTTONS_RIGHT, "presets": {p["name"]: {"left": p["buttons"], "right": p["buttons_right"]} for p in PRESETS},
             "pen_rate": self.rate.last, "mask_ver": self.pmask.ver, "mask_pct": round(100 * self.pmask.coverage()),
             "gesture_list": self.gesture_list(), "trace_key": self.trace_key(), "mask_vers": {k: m.ver for k, m in self.masks.items()},
             "strip_px": STRIP_PX, "strip_side": self.strip_side(), "strip_shown": bool(self.strip_frac()), "tap_slots": TAP_SLOTS, "taps": clean_taps(self.cfg.get("taps")),
@@ -767,8 +842,25 @@ class Engine:
             out["touch"] = t
         if a and time.time() - a["at"] < 1.5:
             out["gesture"] = a["action"]
+        now = time.time()
+        out["gev"] = [[n, g] for n, at, g in list(self.gestures_seen) if now - at < 3]
         w = self.worker
         s = w.latest if w else None
+        # the reports in between, thinned to what a picture needs: [p, q, pressure 0..1024 (0 = hover), tilt x, tilt y]
+        pts, since = [], self.trail_seen
+        if w is None or self.mapper is None:
+            return out
+        if w.n < since:
+            since = 0
+        for n, r in list(w.trail):
+            if n <= since or not r.in_range:
+                continue
+            u, v = self.mapper.oriented(*self.mapper.uv(r.x, r.y))
+            down = r.touch or r.pressure > 0
+            tx_, ty_ = self.mapper.tilt_xy(r.tilt_x, r.tilt_y)
+            pts.append([round(u, 5), round(v, 5), self.mapper.pressure(r.pressure) if down else 0, round(tx_, 1), round(ty_, 1)])
+        self.trail_seen = w.n
+        out["trail"] = pts[-600:]
         if s is None or not s.in_range or self.pen is None:
             return out
         p, q = self.mapper.oriented(*self.mapper.uv(s.x, s.y))
@@ -827,6 +919,10 @@ class Engine:
                 val = float(val)
             if key == "mask_contrast":
                 val = max(0.25, min(8.0, float(val)))
+            if key == "mask_strength":
+                val = max(0.0, min(2.0, float(val)))
+            if key in ("view_pressure", "view_tilt", "view_hover"):
+                val = bool(val)
             if key == "mask_mode" and val not in MASK_MODES:
                 val = "fade"
             if key == "model":  # picked in the setup guide; the tablet itself says once it connects
@@ -1039,6 +1135,7 @@ class Engine:
             self.cfg["mask_contrast"] = float(entry.get("contrast", 1))
             self.cfg["mask_mode"] = entry.get("mode", "fade") if entry.get("mode") in MASK_MODES else "fade"
             self.cfg["mask_invert"] = bool(entry.get("invert"))
+            self.cfg["mask_strength"] = max(0.0, min(2.0, float(entry.get("strength", 1))))
 
     def pick_mask(self, mid):
         """Switch masks (from the page or the tablet strip); "" = none, which turns the mask off."""
@@ -1060,7 +1157,7 @@ class Engine:
             k = n
             while (name or f"Mask {k}") in names:
                 k += 1
-            entry = {"id": mid, "name": (name or f"Mask {k}")[:24], "contrast": 1.0, "mode": "fade", "invert": False}
+            entry = {"id": mid, "name": (name or f"Mask {k}")[:24], "contrast": 1.0, "mode": "fade", "invert": False, "strength": 1.0}
             self.cfg["masks"] = self.cfg["masks"] + [entry]
             self.masks[mid] = penmask.Mask(self.mask_path(mid))
             self.masks[mid].set_raw(bytes(penmask.N * penmask.N))  # a fresh file, even over an old one
@@ -1182,10 +1279,11 @@ class Engine:
         a = self.mapper.absinfo.get("PRESSURE") if self.mapper else None
         if not a or not level:
             return s
-        lo, span, f = a["min"], (a["max"] - a["min"]) or 1, level / 255
+        k = float(self.cfg.get("mask_strength", 1.0))
+        lo, span, f = a["min"], (a["max"] - a["min"]) or 1, min(1.0, k * level / 255)
         n = min(1.0, max(0.0, (s.pressure - lo) / span))
         if self.cfg.get("mask_mode") == "gate":
-            n = 0.0 if n <= f else (n - f) / (1 - f)
+            n = 0.0 if n <= f else (n - f) / (1 - f) if f < 1 else 0.0
         else:
             n *= 1 - f
         return dataclasses.replace(s, pressure=int(round(lo + n * span)))
@@ -1261,6 +1359,13 @@ class Engine:
         if not parts:
             return
         name, arg = parts[0], parts[1] if len(parts) > 1 else ""
+        if name in ("pan", "rotate", "tap", "undo", "redo", "zoomin", "zoomout", "inkcleared"):
+            self.gestures_n += 1  # every step, moves too: the sample image follows them
+            self.gestures_seen.append([self.gestures_n, time.time(), a])
+        if name == "inkcleared":  # five fingers swiped down; the tablet cleared its own ink
+            self.last_action = {"action": a, "at": time.time()}
+            self.changed()
+            return
         if name == "touch":  # many per second: not an action for the activity line
             self.on_touch(parts)
             return

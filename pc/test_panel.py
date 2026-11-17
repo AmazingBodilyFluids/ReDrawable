@@ -1,3 +1,4 @@
+import collections
 """Panel buttons, key combinations and tablet actions (no Windows, no tablet needed)."""
 import threading
 import time
@@ -89,6 +90,7 @@ def bare_engine(cfg=None):
                          desk=lambda: (0, 0, 1920, 1080))
     e.pan_space = False
     e.last_action = None
+    e.gestures_seen, e.gestures_n = collections.deque(maxlen=64), 0
     e.mapper = None
     e.changed = lambda: None
     e.settings = []
@@ -118,6 +120,16 @@ class TabletActions(unittest.TestCase):
         e.tablet_action("release 1")
         self.assertEqual(e.keys.held, set())
         self.assertEqual(e.sent, [(0x52, False), (0x52, True)])
+
+    def test_gestures_are_kept_for_the_sample_image(self):
+        e = bare_engine()
+        e.touch = None
+        for a in ("pan begin", "pan 10 5", "pan end", "zoomin", "inkcleared", "press 99", "bogus"):
+            e.tablet_action(a)
+        self.assertEqual([g for _, _, g in e.gestures_seen], ["pan begin", "pan 10 5", "pan end", "zoomin", "inkcleared"])
+        self.assertEqual(e.last_action["action"], "inkcleared")  # a swipe down shows in the activity line too
+        e.worker, e.trail_seen = None, 0
+        self.assertEqual([g for _, g in e.live()["gev"]], ["pan begin", "pan 10 5", "pan end", "zoomin", "inkcleared"])
 
     def test_empty_and_out_of_range_do_nothing(self):
         e = bare_engine()
@@ -188,14 +200,15 @@ class Profiles(unittest.TestCase):
     def test_old_layout_becomes_first_profile(self):
         mine = core.clean_buttons([{"t": "Mine", "kind": "shortcut", "keys": "m"}])
         e = self.engine({"panel_buttons": mine})
-        self.assertEqual(len(e.cfg["panel_profiles"]), 1)
+        names = [p["name"] for p in e.cfg["panel_profiles"]]
+        self.assertEqual(names, ["Photoshop"] + [p["name"] for p in core.PRESETS])  # the presets join after it
         self.assertEqual(e.cfg["panel_profiles"][0]["buttons"], mine)
         self.assertEqual(e.buttons()[:core.PANEL_SLOTS], mine)
 
     def test_cycle_switches_buttons_and_wraps(self):
         a = core.clean_buttons([{"t": "A", "kind": "shortcut", "keys": "a"}])
         b = core.clean_buttons([{"t": "B", "kind": "hold", "keys": "b"}])
-        e = self.engine({"panel_profiles": [{"name": "PS", "buttons": a}, {"name": "Krita", "buttons": b}]})
+        e = self.engine({"panel_profiles": [{"name": "PS", "buttons": a}, {"name": "Krita", "buttons": b}], "presets_version": core.PRESETS_VERSION})
         e.tablet_action("press 0")
         self.assertEqual(e.sent[0], (0x41, False))  # A
         e.keys.down("shift")
@@ -212,18 +225,34 @@ class Profiles(unittest.TestCase):
         self.assertEqual(e.cfg["panel_profile"], 1)
 
     def test_editing_buttons_edits_the_active_profile(self):
-        e = self.engine({"panel_profiles": [{"name": "One"}, {"name": "Two"}], "panel_profile": 1})
+        e = self.engine({"panel_profiles": [{"name": "One"}, {"name": "Two"}], "panel_profile": 1, "presets_version": core.PRESETS_VERSION})
         e.set("panel_buttons", [{"t": "X", "kind": "shortcut", "keys": "x"}])
         self.assertEqual(e.cfg["panel_profiles"][1]["buttons"][0]["t"], "X")
         self.assertEqual(e.cfg["panel_profiles"][0]["buttons"], core.clean_buttons(None))
 
     def test_deleting_profiles_keeps_a_valid_selection(self):
-        e = self.engine({"panel_profiles": [{"name": "One"}, {"name": "Two"}], "panel_profile": 1})
+        e = self.engine({"panel_profiles": [{"name": "One"}, {"name": "Two"}], "panel_profile": 1, "presets_version": core.PRESETS_VERSION})
         e.set("panel_profiles", [{"name": "  Only   one ", "buttons": []}])
         self.assertEqual(e.cfg["panel_profile"], 0)
         self.assertEqual(e.cfg["panel_profiles"][0]["name"], "Only one")
         e.set("panel_profiles", [])
-        self.assertEqual(len(e.cfg["panel_profiles"]), 1)  # never none
+        names = [p["name"] for p in e.cfg["panel_profiles"]]
+        self.assertTrue(names and set(p["name"] for p in core.PRESETS) <= set(names))  # never none: the presets come back
+
+    def test_presets_join_existing_profiles_once(self):
+        e = self.engine({"panel_profiles": [{"name": "Mine"}, {"name": "art"}], "panel_profile": 1})
+        names = [p["name"] for p in e.cfg["panel_profiles"]]
+        self.assertEqual(names, ["Mine", "art", "Photography", "Typography", "Design"])  # "art" is taken: no second Art
+        self.assertEqual(e.cfg["panel_profile"], 1)  # the one in use stays in use
+        e.set("panel_profiles", e.cfg["panel_profiles"][:2])  # deleting presets sticks
+        e2 = self.engine(dict(e.cfg))
+        self.assertEqual([p["name"] for p in e2.cfg["panel_profiles"]], ["Mine", "art"])
+
+    def test_presets_are_valid_layouts(self):
+        for p in core.PRESETS:
+            for side in ("buttons", "buttons_right"):
+                self.assertEqual(len(p[side]), core.PANEL_SLOTS)
+                self.assertEqual(core.clean_buttons(p[side]), p[side], p["name"])  # no key dropped, no title cut
 
 
 class PaperAndTrace(Profiles):
@@ -329,6 +358,23 @@ class TraceMask(Profiles):
         e.set("mask_on", False)
         self.assertFalse(e.masked(self.cell(0, 0)))
 
+    def test_live_hands_over_each_report_once(self):
+        e = self.masked_engine()
+        e.touch = e.last_action = None
+        e.trail_seen, e.pen, e.peak = 0, {"path": "x"}, 0
+        w = core.Worker.__new__(core.Worker)
+        w.trail, w.n = collections.deque(maxlen=3000), 0
+        for i, pr in enumerate([0, 1000, 2000]):  # one hover report, then two with ink
+            w.n += 1
+            w.latest = rt.PenState(x=100 * i, y=100, pen=True, touch=pr > 0, pressure=pr)
+            w.trail.append((w.n, w.latest))
+        e.worker = w
+        pts = e.live()["trail"]
+        self.assertEqual(len(pts), 3)
+        self.assertEqual(pts[0][2], 0)          # hovering
+        self.assertGreater(pts[2][2], pts[1][2])  # harder press, bigger number
+        self.assertEqual(e.live()["trail"], [])  # nothing new: nothing again
+
     def test_grey_fades_or_gates_the_pressure(self):
         e = self.masked_engine()
         s = rt.PenState(x=1, y=1, pen=True, touch=True, pressure=2048)
@@ -338,6 +384,12 @@ class TraceMask(Profiles):
         e.set("mask_mode", "gate")
         self.assertEqual(e.mask_pressure(s, 153).pressure, 0)     # below the 60% threshold: no ink
         self.assertEqual(e.mask_pressure(s, 51).pressure, round(4096 * (0.5 - 0.2) / 0.8))
+        e.set("mask_strength", 2.0)  # intensity doubles the grey's hold: a 20% grey now needs 40%
+        self.assertEqual(e.mask_pressure(s, 51).pressure, round(4096 * (0.5 - 0.4) / 0.6))
+        e.set("mask_strength", 0.0)  # none: grey lets the pen through untouched
+        self.assertEqual(e.mask_pressure(s, 153).pressure, 2048)
+        e.set("mask_mode", "fade"); e.set("mask_strength", 0.5)
+        self.assertEqual(e.mask_pressure(s, 102).pressure, round(2048 * 0.8))
         e.set("mask_mode", "bogus")
         self.assertEqual(e.cfg["mask_mode"], "fade")
 
@@ -390,7 +442,7 @@ class TraceMask(Profiles):
         e.delete_mask(a)
         self.assertEqual(e.cfg["mask_active"], b)
         e.rename_mask(b, "  Ruler  ")
-        self.assertEqual(e.cfg["masks"], [{"id": b, "name": "Ruler", "contrast": 1.0, "mode": "fade", "invert": False}])
+        self.assertEqual(e.cfg["masks"], [{"id": b, "name": "Ruler", "contrast": 1.0, "mode": "fade", "invert": False, "strength": 1.0}])
 
     def test_a_mask_keeps_its_image_and_place(self):
         e = self.masked_engine()

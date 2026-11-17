@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Paper Tablet: the desktop app (pywebview + WebView2). Double-click "Paper Tablet.bat".
+ReDrawable: the desktop app (pywebview + WebView2). Double-click "ReDrawable.bat".
 
 The window is an HTML interface in web/; everything it does goes through Api below to the
 headless Engine in core.py. A small splash window shows while the engine starts.
@@ -19,7 +19,7 @@ import paths  # noqa: E402
 
 if sys.stderr is None or sys.executable.lower().endswith("pythonw.exe"):
     # pythonw has no console: keep errors in a log (where: paths.log_dir)
-    sys.stderr = sys.stdout = open(os.path.join(paths.log_dir(), "paper-tablet.log"), "a", buffering=1, encoding="utf-8")
+    sys.stderr = sys.stdout = open(os.path.join(paths.log_dir(), "redrawable.log"), "a", buffering=1, encoding="utf-8")
     print(f"--- started {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 import rmtablet as rt  # noqa: E402
@@ -42,19 +42,49 @@ if sys.platform == "win32":
 BG = "#060e17"
 # Window background per theme (web/themes.css), shown before the page has painted
 THEME_BG = {"default": BG, "graphite": "#101215", "ledger": "#f4f1e8", "intaglio": "#0e1a15"}
-SPLASH_MIN_S = 2.6
+SPLASHES = ("slab", "snap")  # web/splash.html, Settings > Splash
 SPLASH_MAX_S = 7.0  # give up waiting for the splash animation after this
-MAIN_TITLE = "Paper Tablet"
-SPLASH_TITLE = "Paper Tablet starting"
+MAIN_TITLE = "ReDrawable"
+SPLASH_TITLE = "ReDrawable starting"
+
+
+def saved_setting(key, allowed, default):
+    """One saved setting, read before the engine exists (the splash needs it at once)."""
+    try:
+        with open(CONFIG, encoding="utf-8") as f:
+            val = json.load(f).get("gui", {}).get(key)
+    except (OSError, ValueError):
+        val = None
+    return val if val in allowed else default
 
 
 def saved_theme():
-    try:
-        with open(CONFIG, encoding="utf-8") as f:
-            theme = json.load(f).get("gui", {}).get("theme")
-    except (OSError, ValueError):
-        theme = None
-    return theme if theme in THEME_BG else "intaglio"
+    return saved_setting("theme", THEME_BG, "intaglio")
+
+
+def clear_backdrop(title):
+    """Make a transparent pywebview window truly see-through on Windows 11: pywebview's transparent=True
+    is not enough on WebView2. The system backdrop goes off (pywebview sets Mica on dark windows) and so
+    does the accent policy, or Windows paints a frosted blur behind the page. Same recipe as the Kallisti
+    Case Manager splash. Call while the window is still hidden."""
+    import ctypes
+    u, dwm = ctypes.windll.user32, ctypes.windll.dwmapi
+    hwnd = u.FindWindowW(None, title)
+    if not hwnd:
+        return
+    dwm.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(ctypes.c_int(1)), 4)  # DWMWA_SYSTEMBACKDROP_TYPE: none
+    dwm.DwmSetWindowAttribute(hwnd, 3, ctypes.byref(ctypes.c_int(1)), 4)   # DWMWA_TRANSITIONS_FORCEDISABLED
+    dwm.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(ctypes.c_int(1)), 4)  # DWMWA_WINDOW_CORNER_PREFERENCE: square, as the main window
+
+    class Accent(ctypes.Structure):
+        _fields_ = [("state", ctypes.c_int), ("flags", ctypes.c_int), ("color", ctypes.c_uint), ("anim", ctypes.c_int)]
+
+    class Wca(ctypes.Structure):
+        _fields_ = [("attr", ctypes.c_int), ("data", ctypes.c_void_p), ("size", ctypes.c_size_t)]
+
+    pol = Accent(0, 0, 0, 0)  # ACCENT_DISABLED
+    wca = Wca(19, ctypes.cast(ctypes.pointer(pol), ctypes.c_void_p), ctypes.sizeof(pol))  # WCA_ACCENT_POLICY
+    u.SetWindowCompositionAttribute(hwnd, ctypes.byref(wca))
 
 
 def place_window(title, width, height):
@@ -136,6 +166,10 @@ class Api:
 
     def clear_ink(self):
         self._engine.companion.send("clear")
+
+    def tablet_action(self, a):
+        """A click on the preview's panel or mask strip: the same action the tablet sends for a tap there."""
+        self._engine.tablet_action(str(a))
 
     def get_mask(self):
         """The pen mask as stored (before contrast): base64 of N x N bytes, and its version."""
@@ -264,13 +298,13 @@ class Api:
         self._window.hide()
         if not self._told_tray:
             self._told_tray = True
-            self._tray.balloon("Paper Tablet is still running",
+            self._tray.balloon("ReDrawable is still running",
                                "It stays in the tray so the pen keeps working. Right-click the icon to exit.")
         return True
 
 
 def already_running():
-    """One Paper Tablet at a time: two would mean two synthetic pens fighting over the cursor.
+    """One ReDrawable at a time: two would mean two synthetic pens fighting over the cursor.
     A named mutex says whether another copy owns it; if so, ask it to show its window (it may be
     hidden in the tray), or bring an older copy's window forward."""
     if sys.platform != "win32":
@@ -278,12 +312,17 @@ def already_running():
     import ctypes
     k, u = ctypes.WinDLL("kernel32", use_last_error=True), ctypes.windll.user32
     k.CreateMutexW.restype = ctypes.c_void_p
-    main.mutex = k.CreateMutexW(None, False, "Local\\PaperTablet.SingleInstance")  # held until exit
-    if ctypes.get_last_error() != 183:  # ERROR_ALREADY_EXISTS
+    taken = False
+    # held until exit; the old name too, so a copy from before the rename and this one keep out of each other's way
+    main.mutexes = []
+    for name in ("Local\\ReDrawable.SingleInstance", "Local\\PaperTablet.SingleInstance"):
+        main.mutexes.append(k.CreateMutexW(None, False, name))
+        taken = taken or ctypes.get_last_error() == 183  # ERROR_ALREADY_EXISTS
+    if not taken:
         return False
     if winextras.signal_show():
         return True
-    hwnd = u.FindWindowW(None, MAIN_TITLE)
+    hwnd = u.FindWindowW(None, MAIN_TITLE) or u.FindWindowW(None, "Paper Tablet")
     if hwnd:
         u.ShowWindow(hwnd, 9)  # SW_RESTORE
         u.SetForegroundWindow(hwnd)
@@ -292,13 +331,44 @@ def already_running():
 
 def main():
     if already_running():
-        print("Paper Tablet is already running; brought it to the front.", flush=True)
+        print("ReDrawable is already running; brought it to the front.", flush=True)
         return
     api = Api()
     theme = saved_theme()
-    splash = webview.create_window(SPLASH_TITLE, os.path.join(HERE, "web", "splash.html"),
-                                   width=560, height=340, frameless=True, easy_drag=False,
-                                   on_top=True, background_color=THEME_BG[theme], resizable=False)
+    # The splash is one object on the bare desktop (web/splash.html). On Windows its window is transparent
+    # and the exact size and place of the main window, so the object can grow into it; elsewhere, where
+    # see-through windows depend on the desktop, it stays the small themed window.
+    clear = sys.platform == "win32"
+    start_js = "start(%s)" % json.dumps({"variant": saved_setting("splash", SPLASHES, "slab"), "theme": theme,
+                                         "opaque": not clear})
+    if clear:
+        splash = webview.create_window(SPLASH_TITLE, os.path.join(HERE, "web", "splash.html"),
+                                       width=1240, height=820, frameless=True, easy_drag=False,
+                                       on_top=True, transparent=True, hidden=True, resizable=False)
+
+        def show_splash():
+            try:
+                place_window(SPLASH_TITLE, 1240, 820)
+                clear_backdrop(SPLASH_TITLE)
+            except Exception as ex:
+                print("splash backdrop:", repr(ex), flush=True)
+            try:
+                splash.show()
+                splash.evaluate_js(start_js)
+            except Exception as ex:
+                print("splash failed to show:", repr(ex), flush=True)
+
+        # pywebview shows a transparent window as soon as it starts loading, ignoring hidden=True. The flag
+        # has done its work once the native window exists, so it is cleared there and the window shows
+        # only when show_splash says so, already in place and see-through.
+        if hasattr(splash.events, "before_show"):
+            splash.events.before_show += lambda: setattr(splash, "transparent", False)
+        splash.events.loaded += lambda: threading.Thread(target=show_splash, daemon=True).start()
+    else:
+        splash = webview.create_window(SPLASH_TITLE, os.path.join(HERE, "web", "splash.html"),
+                                       width=560, height=340, frameless=True, easy_drag=False,
+                                       on_top=True, background_color=THEME_BG[theme], resizable=False)
+        splash.events.loaded += lambda: splash.evaluate_js(start_js)
     window = webview.create_window(MAIN_TITLE, os.path.join(HERE, "web", "index.html"), js_api=api,
                                    width=1240, height=820, min_size=(900, 600),
                                    frameless=True, easy_drag=False, hidden=True, background_color=THEME_BG[theme])
@@ -335,25 +405,34 @@ def main():
             print("engine failed to start:", repr(ex), flush=True)
             raise
         api._ready.set()
-        # Let the splash animation play to its end (the page reports it), then fade it out
-        # before the main window appears, instead of cutting it off at a fixed time.
-        time.sleep(max(0.0, SPLASH_MIN_S - (time.time() - t0)))
-        while time.time() - t0 < SPLASH_MAX_S:
-            try:
-                if splash.evaluate_js("window.splashDone === true"):
-                    break
-            except Exception:
-                break
-            time.sleep(0.05)
-        time.sleep(0.2)  # a beat on the finished logo
+        # Let the splash object land (the page reports it) instead of cutting it off at a fixed time,
+        # then have it grow over its whole window (or fade, where the window is not see-through).
+        def splash_says(flag, until):
+            while time.time() < until:
+                try:
+                    if splash.evaluate_js("window.%s === true" % flag):
+                        return
+                except Exception:
+                    return
+                time.sleep(0.05)
+
+        splash_says("splashDone", t0 + SPLASH_MAX_S)
+        time.sleep(0.35)  # a beat on the finished logo
         try:
-            splash.evaluate_js("fadeOut()")
-            time.sleep(0.4)
+            splash.evaluate_js("handoff()")
+            splash_says("splashCovered", time.time() + 1.5)
         except Exception:
             pass
         place_window(MAIN_TITLE, 1240, 820)  # while still hidden, so it never shows at the wrong size
         window.show()
         place_window(MAIN_TITLE, 1240, 820)
+        if clear:  # the main window is now under the splash's field, the same size: fade the field away
+            try:
+                time.sleep(0.25)
+                splash.evaluate_js("reveal()")
+                time.sleep(0.5)
+            except Exception:
+                pass
         if sys.platform == "win32":
             start_tray()
         notify()

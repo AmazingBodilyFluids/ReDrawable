@@ -26,6 +26,8 @@
 // Exits on stdin EOF or 5 s without "ping" (PC gone), the power button, SIGTERM/SIGHUP/SIGINT.
 
 #include <QGuiApplication>
+#include <QFontDatabase>
+#include <QQmlContext>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QScreen>
@@ -45,6 +47,8 @@
 #include <linux/input.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+
+#include "name_font.h"
 
 // QML console output: "ACT:..." lines are actions for the PC and go to stdout on their own line;
 // everything else goes to stderr as before ("LOG:" marks our own diagnostics).
@@ -158,6 +162,15 @@ int main(int argc, char **argv) {
     std::signal(SIGPIPE, SIG_IGN);
 
     QQmlApplicationEngine engine;
+    // the app's name on the panel, in EB Garamond (OFL) as on the PC; only its ten letters are embedded
+    QString nameFamily;
+    int fid = QFontDatabase::addApplicationFontFromData(
+        QByteArray::fromRawData(reinterpret_cast<const char *>(kNameFont), sizeof kNameFont));
+    if (fid >= 0 && !QFontDatabase::applicationFontFamilies(fid).isEmpty())
+        nameFamily = QFontDatabase::applicationFontFamilies(fid).first();
+    else
+        fprintf(stderr, "companion: name font didn't load\n");
+    engine.rootContext()->setContextProperty("nameFamily", nameFamily);
     engine.loadData(QByteArray(COMPANION_QML));
     if (engine.rootObjects().isEmpty()) {
         fprintf(stderr, "companion: QML failed to load\n");

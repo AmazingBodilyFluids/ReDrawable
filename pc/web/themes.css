@@ -1,6 +1,6 @@
 /* Colour themes, chosen in the title bar (html[data-theme], saved as the "theme" setting).
    "default" is app.css's own :root palette. Graphite, Ledger and Intaglio come from Kallisti Case
-   Manager (ui/app.css), mapped onto Paper Tablet's variables; --s4 and --border2 are added here.
+   Manager (ui/app.css), mapped onto ReDrawable's variables; --s4 and --border2 are added here.
    Load after app.css. The tablet pictures (body, paper screen) keep their own colours. */
 [data-theme="graphite"] {
   --ink:#f2f0ea;

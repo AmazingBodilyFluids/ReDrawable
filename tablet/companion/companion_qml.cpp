@@ -56,7 +56,7 @@ Window {
         if (panelOnR && (panelOpenR ? p.x >= view.width - panelPx : (p.x >= view.width - tabS && p.y < tabS))) return "right"
         return ""
     }
-    readonly property real headH: 230
+    readonly property real headH: 190   // buttons 32 px under the profile row, as far as the gestures button is under them
     readonly property real profY: tabS + 10   // the profile row: arrows either side of its name
     readonly property real profH: 72
     property string profileName: ""
@@ -627,7 +627,7 @@ Window {
             if (gMode === "five") {
                 var c5 = centroid(l), dy5 = c5.y - gC0.y
                 if (dy5 > 180 && Math.abs(c5.x - gC0.x) < dy5 * 0.6 && Math.abs(a) < 8) {
-                    gMode = "dead"; gTapOk = false; clearInk(); fullRefresh(); say("Ink cleared"); return
+                    gMode = "dead"; gTapOk = false; clearInk(); fullRefresh(); say("Ink cleared"); act("inkcleared"); return
                 }
                 if (Math.abs(a) < 8) return
                 gMode = "rotate"; gTapOk = false; act("rotate begin")
@@ -880,7 +880,8 @@ Window {
             Column {
                 x: panel.side === "right" ? 22 : win.tabS + 14; y: 24
                 width: parent.width - win.tabS - 36; spacing: 8
-                Text { text: "PAPER\nTABLET"; font.pixelSize: 22; font.bold: true; font.letterSpacing: 4; color: "black"; lineHeight: 1.1 }
+                // the name in EB Garamond (main.cpp loads it from memory); the tablet's own font if that failed
+                Text { text: "ReDrawable"; font.family: nameFamily; font.pixelSize: 36; font.weight: Font.DemiBold; color: "black" }
             }
             Item {  // profile row: < name >
                 id: prof
@@ -907,8 +908,13 @@ Window {
                     }
                 }
             }
-            Text { x: 22; y: win.profY + win.profH + 8; width: parent.width - 44; text: win.toast
-                   font.pixelSize: 21; font.bold: true; color: "black"; elide: Text.ElideRight }
+            Rectangle {  // a short message, shown over the profile row for a moment
+                visible: win.toast !== ""
+                x: 16; y: win.profY; width: parent.width - 32; height: win.profH
+                color: "white"; border.color: "black"; border.width: 3; radius: 14
+                Text { anchors.fill: parent; anchors.margins: 12; text: win.toast; font.pixelSize: 21; font.bold: true; color: "black"
+                       horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+            }
             Repeater {
                 model: Math.max(0, Math.min(16, win.buttons.length - panel.first))
                 Item {

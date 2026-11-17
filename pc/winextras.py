@@ -11,9 +11,9 @@ import threading
 from ctypes import wintypes as wt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ICON_ON = os.path.join(HERE, "icons", "paper-tablet.ico")
-ICON_OFF = os.path.join(HERE, "icons", "paper-tablet-off.ico")
-SHOW_EVENT = "Local\\PaperTablet.Show"
+ICON_ON = os.path.join(HERE, "icons", "redrawable.ico")
+ICON_OFF = os.path.join(HERE, "icons", "redrawable-off.ico")
+SHOW_EVENT = "Local\\ReDrawable.Show"
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -42,7 +42,8 @@ def listen_for_show(callback):
 
 def signal_show():
     """From a second launch: ask the running copy to show its window. Returns False if none listens."""
-    ev = kernel32.OpenEventW(0x0002, False, SHOW_EVENT)  # EVENT_MODIFY_STATE
+    ev = (kernel32.OpenEventW(0x0002, False, SHOW_EVENT)  # EVENT_MODIFY_STATE
+          or kernel32.OpenEventW(0x0002, False, "Local\\PaperTablet.Show"))  # a copy from before the rename
     if not ev:
         return False
     user32.AllowSetForegroundWindow(wt.DWORD(-1).value)  # ASFW_ANY: let it come to the front
@@ -152,7 +153,7 @@ class Tray:
         def later(fn):
             return lambda: threading.Thread(target=fn, daemon=True).start()
 
-        self.open_item = item("Open Paper Tablet", self.on_open)
+        self.open_item = item("Open ReDrawable", self.on_open)
         self.open_item.Font = D.Font(self.open_item.Font, D.FontStyle.Bold)
         self.pen_item = item("Disable pen input", later(self.on_toggle))
         menu = WF.ContextMenuStrip()
@@ -169,8 +170,8 @@ class Tray:
         self.state = state
         on = connected and output
         self.icon.Icon = self.icons[on]
-        self.icon.Text = ("Paper Tablet: pen input on" if on else "Paper Tablet: pen input off" if connected
-                          else "Paper Tablet: tablet not connected")
+        self.icon.Text = ("ReDrawable: pen input on" if on else "ReDrawable: pen input off" if connected
+                          else "ReDrawable: tablet not connected")
         self.pen_item.Text = "Disable pen input" if on else "Enable pen input"
         self.pen_item.Enabled = connected
 

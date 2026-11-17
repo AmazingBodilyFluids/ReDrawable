@@ -1,4 +1,4 @@
-# Paper Tablet
+# ReDrawable
 
 **Use a reMarkable Paper Pro as a pressure-sensitive pen tablet for Windows.** The reMarkable 2 and 1
 are supported in beta.
@@ -8,11 +8,11 @@ Windows Ink app. You get pressure, tilt, hover and the eraser end. The tablet's 
 strokes as a fading trail. A side panel puts your shortcuts under your other hand, and finger gestures
 handle undo, redo, pan and zoom.
 
-![Paper Tablet on the reMarkable Paper Pro: shortcut panel and drawing area](docs/screenshots/tablet.png)
+![ReDrawable on the reMarkable Paper Pro: shortcut panel and drawing area](docs/screenshots/tablet.png)
 
-![The Paper Tablet desktop app](docs/screenshots/home.png)
+![The ReDrawable desktop app](docs/screenshots/home.png)
 
-> Paper Tablet is an independent project. It is not made, endorsed or supported by reMarkable AS.
+> ReDrawable is an independent project. It is not made, endorsed or supported by reMarkable AS.
 > It needs **developer mode** on the tablet, which is your own decision; read the safety notes below.
 
 ## Features
@@ -75,16 +75,16 @@ handle undo, redo, pan and zoom.
 
 Download from [Releases](../../releases):
 
-- **`PaperTablet-Setup-x.y.z.exe`** installs for your user account only, with no admin rights. You get a
+- **`ReDrawable-Setup-x.y.z.exe`** installs for your user account only, with no admin rights. You get a
   Start-menu entry, and an uninstaller removes it cleanly.
-- **`PaperTablet-Portable-x.y.z.zip`** needs no installation. Unzip it anywhere, even onto a USB stick, and run
-  *Paper Tablet*. Settings, calibration and the app's key stay in the `data` folder next to it, so nothing
+- **`ReDrawable-Portable-x.y.z.zip`** needs no installation. Unzip it anywhere, even onto a USB stick, and run
+  *ReDrawable*. Settings, calibration and the app's key stay in the `data` folder next to it, so nothing
   is left on the PC.
 
 The builds aren't code-signed yet, so Windows SmartScreen may warn the first time you run them
 (*More info → Run anyway*).
 
-**From source:** clone this repo and double-click `Paper Tablet.bat`. It installs `paramiko` and `pywebview`
+**From source:** clone this repo and double-click `ReDrawable.bat`. It installs `paramiko` and `pywebview`
 once, then starts the app.
 
 ## First run
@@ -160,7 +160,7 @@ removing exactly one stroke, it only works in the drawing programs listed on *Pe
   (`SDK=/path/to/sdk tablet/companion/build.sh`). Prebuilt binaries are in the repo.
 - **The installer and portable zip** are built with the scripts in `installer/` (embedded Python + Inno Setup).
 - **Portable mode** works with any copy: put an empty file named `portable` (or `portable.txt`) next to
-  `Paper Tablet.bat` or the exe, and everything is kept in `data\` beside it.
+  `ReDrawable.bat` or the exe, and everything is kept in `data\` beside it.
 
 [docs/TECHNICAL.md](docs/TECHNICAL.md) covers how it works: measured hardware ranges, the tablet-screen app,
 and the command-line tool.

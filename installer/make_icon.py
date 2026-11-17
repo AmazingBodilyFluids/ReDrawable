@@ -1,5 +1,5 @@
-"""Draws the app icons into pc/icons/: paper-tablet.ico, the title-bar logo (pc/web/index.html,
-.tb-logo) in champagne on a navy rounded square, and paper-tablet-off.ico, the tray icon while
+"""Draws the app icons into pc/icons/: redrawable.ico, the title-bar logo (pc/web/index.html,
+.tb-logo) in champagne on a navy rounded square, and redrawable-off.ico, the tray icon while
 pen input is off (grey, no ink, struck through). Needs Pillow; only run when the logo changes."""
 import os
 from PIL import Image, ImageDraw
@@ -45,7 +45,7 @@ def draw(on=True):
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
-    for name, on in (("paper-tablet.ico", True), ("paper-tablet-off.ico", False)):
+    for name, on in (("redrawable.ico", True), ("redrawable-off.ico", False)):
         path = os.path.join(OUT, name)
         draw(on).save(path, sizes=[(n, n) for n in SIZES])
         print("wrote", path)

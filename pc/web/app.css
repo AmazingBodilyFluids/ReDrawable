@@ -1,4 +1,4 @@
-/* Paper Tablet. Palette and type: deep navy, champagne
+/* ReDrawable. Palette and type: deep navy, champagne
    accent, steel-blue second accent, IBM Plex, hairline borders, small radii. */
 :root {
   --bg:#060e17; --s1:#0a1520; --s2:#0D1B2A; --s3:#111f30; --s4:#16273b;
@@ -269,17 +269,16 @@ ol.steps li .sub { color:var(--dim2); font-size:12px; margin-top:2px; }
 /* the calibration window sits over the setup guide, which opens it */
 .overlay.cal { z-index:25; }
 .cw-step[hidden] { display:none; }
-.cal-head { display:flex; align-items:center; gap:28px; flex-wrap:wrap; }
+.cal-head { display:flex; align-items:center; gap:16px; }
 /* the saved calibration in one row: summary, a 3 x 3 accuracy map (hover a square), average and worst */
-#calSaved { display:flex; align-items:center; gap:22px; flex-wrap:wrap; color:var(--text); font-size:13px; }
+#calSaved { flex:1; min-width:0; display:flex; align-items:center; gap:14px; color:var(--text); font-size:13px; white-space:nowrap; }
+#calSaved .cal-sum { overflow:hidden; text-overflow:ellipsis; color:var(--dim); }
 .cal-map { display:grid; grid-template-columns:repeat(3, 13px); gap:3px; }
 .cal-map i { position:relative; width:13px; height:13px; border-radius:2px; background:var(--green); opacity:0.85; cursor:default; }
 .cal-map i.mid { background:var(--amber); } .cal-map i.bad { background:var(--red); }
 .cal-map i:hover { opacity:1; outline:1.5px solid var(--text); outline-offset:1px; }
-.cal-map i:hover::after { content:attr(data-tip); position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%);
-  white-space:nowrap; padding:5px 9px; border-radius:var(--radius); background:var(--s3); border:1px solid var(--border2);
-  font-family:var(--f-mono); font-size:11.5px; color:var(--text); z-index:5; pointer-events:none; }
-.cal-stats { font-family:var(--f-mono); font-size:11.5px; color:var(--dim2); line-height:1.6; }
+
+.cal-stats { font-family:var(--f-mono); font-size:12px; color:var(--text); }
 .cal-stats b { color:var(--dim); font-weight:400; }
 .toast { position:fixed; bottom:22px; left:50%; transform:translate(-50%, 20px); opacity:0; background:var(--s3); border:1px solid var(--accent-b);
          padding:10px 16px; border-radius:var(--radius-lg); font-size:12.5px; transition:all .25s; pointer-events:none; z-index:30; box-shadow:0 10px 30px rgba(0,0,0,.4); }
@@ -317,7 +316,7 @@ ol.steps li .sub { color:var(--dim2); font-size:12px; margin-top:2px; }
 .pm-light b { position:absolute; font-weight:700; line-height:1; }
 .pm-light i { position:absolute; border:solid #000; }
 .pm-gbtn { position:absolute; border:solid #000; background:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
-.pm-head { font-weight:700; }
+.pm-head { font-family:"EB Garamond", Georgia, serif; font-weight:600; line-height:1; }
 .pm-cell { position:absolute; border:solid #000; background:#fff; display:flex; flex-direction:column; align-items:center;
            justify-content:center; gap:2px; overflow:hidden; cursor:grab; text-align:center; padding:0 3px; transition:box-shadow .1s; }
 .pm-cell b { white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:clip; }
@@ -372,3 +371,59 @@ ol.steps li .sub { color:var(--dim2); font-size:12px; margin-top:2px; }
 .t2.clip { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .legend span + span { margin-left:16px; }
 [hidden] { display:none !important; }
+
+/* an explanation sits in a hover tooltip, not on screen: a dotted underline marks where */
+.tx[data-tip] .t1, .pane-title[data-tip], .range-row > span[data-tip], .lbl[data-tip], .hint[data-tip] {
+  text-decoration:underline dotted; text-decoration-color:var(--dim2); text-underline-offset:3px; text-decoration-thickness:1px; }
+.tx[data-tip], .pane-title[data-tip], h1[data-tip], .range-row > span[data-tip], .lbl[data-tip], .hint[data-tip] { cursor:help; }
+.tip { position:fixed; z-index:1000; max-width:190px; padding:8px 10px; border-radius:var(--radius-lg); pointer-events:none;
+  background:var(--bg); border:1px solid var(--border2); color:var(--text); font-size:12px; line-height:1.45;
+  box-shadow:0 6px 20px rgba(0,0,0,0.35); opacity:0; transition:opacity .12s; }
+.tip.on { opacity:1; }
+/* Home: settings scroll in the left column; the tablet preview stays put on the right */
+.home-split { display:grid; grid-template-columns:minmax(320px, 430px) minmax(0, 1fr); gap:16px; align-items:start; }
+/* the picture without a frame: the tablet itself fills the column, which stays in view */
+.home-preview { position:sticky; top:0; height:calc(100vh - 122px); min-height:300px; display:flex; flex-direction:column;
+  background:none; border:none; box-shadow:none; padding:0; }
+.home-preview .preview-wrap.stage { flex:1; height:auto; min-height:0; background:none; border:none; }
+.hint .ic { width:13px; height:13px; vertical-align:-2px; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; }
+
+/* page tabs in the title bar; the status along the bottom */
+.tabs { display:flex; align-items:stretch; height:100%; gap:2px; margin-left:4px; }
+.tabs .nav { width:auto; padding:0 13px; border-radius:0; gap:8px; font-size:13px; border-bottom:2px solid transparent; }
+.tabs .nav svg { width:15px; height:15px; }
+.tabs .nav:hover { background:none; color:var(--text); }
+.tabs .nav.on { background:none; color:var(--accent); border-bottom-color:var(--accent); }
+.tabs .nav.on::before { display:none; }
+.tabs .nav.ic { padding:0 10px; }
+.sbar { height:30px; flex-shrink:0; display:flex; align-items:center; gap:14px; padding:0 8px 0 14px; background:var(--s1);
+        border-top:1px solid var(--border); font-family:var(--f-mono); font-size:10.5px; color:var(--dim); white-space:nowrap; overflow:hidden; }
+.sbar b { color:var(--text); font-weight:500; font-family:var(--f-sans); font-size:12px; }
+.sbar .sb-msg { color:var(--amber); overflow:hidden; text-overflow:ellipsis; }
+.sbar .grow { flex:1; }
+.sb-acts { display:flex; gap:6px; }
+.sb-acts { align-items:center; gap:12px; }
+.sb-acts .btn { padding:2px 10px; font-size:11.5px; min-height:0; height:22px; min-width:86px; justify-content:center; }
+.sb-wifi { display:flex; align-items:center; gap:7px; cursor:pointer; font-family:var(--f-sans); font-size:11.5px; color:var(--dim); }
+.switch.sm { transform:scale(0.72); transform-origin:center; margin:0 -6px; }
+@media (max-width:1000px) { .tabs .nav { padding:0 9px; } .tabs .nav svg { display:none; } .tabs .nav.ic svg { display:block; } }
+.sb-sep { width:1px; height:14px; background:var(--border2); }
+.sb-wifi:has(input:disabled) { opacity:0.5; cursor:default; }
+
+/* Settings: two short fields side by side; the log fills the right column */
+.pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.home-preview.log-pane { background:var(--s1); border:1px solid var(--border); padding:18px 20px; }
+.log-pane .log { flex:1; min-height:0; max-height:none; height:auto; }
+
+/* Panel & gestures: the panel picture fills the right column like the tablet preview on Home */
+.home-preview.pe-preview { background:var(--s1); border:1px solid var(--border); padding:18px 20px; }
+.pe-preview .pm-wrap { flex:1; min-height:0; align-items:center; overflow:hidden; }
+.pe-preview .pm-wrap { position:relative; display:block; }
+.pm-cv { position:absolute; inset:0; width:100%; height:100%; }
+.pm-duck, .pm-fing { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.pm-ov { position:absolute; color:#000; pointer-events:none; overflow:hidden; }
+.pm-ov > * { pointer-events:auto; }
+
+/* Panel & gestures: the profile field reads as a name, not a disabled box; the sub-page switch */
+#profCombo .input[readonly] { color:var(--text); }
+.seg.subnav { align-self:flex-start; }

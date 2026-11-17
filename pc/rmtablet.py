@@ -126,7 +126,7 @@ class Tablet:
 
         def ping():
             try:
-                self.client.get_transport().global_request("keepalive@paper-tablet", wait=True)
+                self.client.get_transport().global_request("keepalive@redrawable", wait=True)
             except Exception:
                 return
             done.set()

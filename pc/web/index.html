@@ -2,7 +2,7 @@
 <html lang="en" data-theme="intaglio">
 <head>
 <meta charset="utf-8">
-<title>Paper Tablet</title>
+<title>ReDrawable</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="themes.css">
@@ -29,258 +29,183 @@
   <svg class="tb-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
     <rect x="2.5" y="5" width="19" height="14" rx="2.2"/><path d="M6.5 14.5c2.2-3.6 3.6-3.6 4.8-1.2s2.6 2.4 5.2-2.6"/>
   </svg>
-  <div class="tb-name pywebview-drag-region">PAPER TABLET</div>
+  <nav class="tabs">
+    <button class="nav on" data-view="home"><svg><use href="#i-home"/></svg>Home</button>
+    <button class="nav" data-view="calibrate"><svg><use href="#i-target"/></svg>Calibrate</button>
+    <button class="nav" data-view="panel"><svg><use href="#i-grid"/></svg>Panel &amp; gestures</button>
+    <button class="nav" data-view="settings"><svg><use href="#i-gear"/></svg>Settings</button>
+    <button class="nav ic" onclick="Wizard.open()" data-tip="Setup guide"><svg><use href="#i-guide"/></svg></button>
+  </nav>
   <div class="tb-spacer pywebview-drag-region"></div>
-  <!-- status lights, then the three switches used most, as icons (tooltips name them) -->
-  <div class="tb-status">
-    <span class="ind" id="indTab" role="img" aria-label="Tablet: starting"><svg><use href="#i-plug"/></svg><i class="dot busy" id="tabDot"></i></span>
-    <span class="ind" id="indPen" role="img" aria-label="Pen: off"><svg><use href="#i-pen"/></svg><i class="dot" id="penDot"></i></span>
-    <span class="tb-sep"></span>
-    <button class="tbt" id="tgOutput" aria-pressed="false"><svg><use href="#i-penwin"/></svg></button>
-    <button class="tbt" id="tgSnap" aria-pressed="false"><svg><use href="#i-shape"/></svg></button>
-  </div>
-  <button class="wb" title="Minimise" onclick="api().win_minimize()"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></button>
-  <button class="wb" title="Maximise" onclick="toggleMax()"><svg viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1"/></svg></button>
-  <button class="wb close" title="Close" onclick="api().win_close()"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+  <button class="wb" data-tip="Minimise" onclick="api().win_minimize()"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></button>
+  <button class="wb" data-tip="Maximise" onclick="toggleMax()"><svg viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1"/></svg></button>
+  <button class="wb close" data-tip="Close" onclick="api().win_close()"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
 </header>
 
 <div class="layout">
-  <nav class="sidebar">
-    <button class="nav on" data-view="home"><svg><use href="#i-home"/></svg>Home</button>
-    <button class="nav" data-view="calibrate"><svg><use href="#i-target"/></svg>Calibrate</button>
-    <button class="nav" data-view="pen"><svg><use href="#i-pen"/></svg>Pen feel</button>
-    <button class="nav" data-view="panel"><svg><use href="#i-grid"/></svg>Panel &amp; gestures</button>
-    <div class="nav-sep"></div>
-    <button class="nav" data-view="settings"><svg><use href="#i-gear"/></svg>Settings</button>
-    <button class="nav" onclick="Wizard.open()"><svg><use href="#i-guide"/></svg>Setup guide</button>
-    <div class="sb-grow"></div>
-    <div class="device">
-      <div class="lbl">Tablet</div>
-      <div class="name" id="devName">Not connected</div>
-      <div class="meta" id="devMeta">Plug in the USB cable</div>
-    </div>
-  </nav>
 
   <main class="main"><div class="content">
 
     <!-- HOME: what the tablet screen shows, with the live pen, and the settings for what it shows -->
     <section class="view on" id="view-home">
-      <div class="banner" id="banner" hidden>
-        <span class="dot" id="banDot"></span>
-        <div class="tx"><div class="t1" id="banTitle"></div><div class="t2" id="banText"></div></div>
-        <div class="row" id="banActions"></div>
-      </div>
-      <div class="pane">
+      <div class="home-split">
+        <div class="stack home-set">
+          <div class="pane">
+            <div class="pane-title">Background</div>
+            <div class="opt"><div class="tx" data-tip="Printed under your strokes."><div class="t1">Pattern</div></div>
+              <select class="input" data-key="paper" style="width:170px">
+                <option value="plain">Plain</option><option value="lined">Lined</option><option value="squared">Squared</option>
+                <option value="dots">Dots</option><option value="cross">Crosses</option><option value="blueprint">Blueprint (5 × 5)</option>
+                <option value="isometric">Isometric</option></select></div>
+            <div class="opt" style="display:block"><div class="range-row"><span>Spacing</span><input type="range" min="3" max="15" step="0.5" data-key="paper_mm" data-type="float"><span class="v" id="paperV"></span></div></div>
+            <div class="opt" style="display:block" id="lightRow"><div class="range-row"><span data-tip="Your own level comes back when you unplug.">Front light</span><input type="range" min="0" max="100" step="10" id="lightR"><span class="v" id="lightV"></span></div></div>
+          </div>
+          <div class="pane">
+            <div class="pane-title" data-tip="Hold the pen still at the end of a stroke to snap it to a clean shape.">Shapes</div>
+            <div class="opt"><div class="tx" data-tip="Also in the status bar and on a panel button"><div class="t1">Snap shapes</div></div>
+              <label class="switch"><input type="checkbox" data-key="snap"><span class="track"></span></label></div>
+            <div class="opt"><div class="tx" data-tip="Stillness before a stroke snaps"><div class="t1">Hold for</div></div>
+              <div class="seg" data-key="snap_hold_ms"><button data-v="400">0.4 s</button><button data-v="600">0.6 s</button><button data-v="900">0.9 s</button></div></div>
+            <div class="field mt"><span class="lbl" data-tip="Program names, comma separated. Only apps where Ctrl+Z undoes one stroke.">Only in</span><input class="input mono" data-key="snap_apps"></div>
+            <p class="hint mts" id="snapLast"></p>
+          </div>
+          <div class="pane">
+            <div class="pane-title">Ink trail</div>
+            <div class="opt" style="display:block"><div class="range-row"><span data-tip="How long strokes stay, on the tablet and in the preview. Far right: until cleared (5-finger swipe down).">Stays for</span><input type="range" min="250" max="5250" step="250" id="trailR"><span class="v" id="trailV"></span></div></div>
+            <div class="opt"><div class="tx" data-tip="What the preview draws besides the pen's position"><div class="t1">Show</div></div>
+              <div class="row" id="viewTogs"><button class="btn ghost" data-flag="view_pressure" data-tip="Line width follows pressure">Pressure</button><button class="btn ghost" data-flag="view_tilt" data-tip="Ticks point where the pen leans">Tilt</button><button class="btn ghost" data-flag="view_hover" data-tip="A dotted path while the pen hovers">Hover</button></div></div>
+          </div>
+          <div class="pane">
+            <div class="pane-title" data-tip="A stencil for the pen: black blocks it, white lets it through. None turns it off.">Pen mask</div>
+            <div class="prof-row">
+              <div class="combo" id="maskCombo">
+                <input class="input" id="maskName" maxlength="24" placeholder="None" data-tip="Click the name to rename this mask" autocomplete="off" spellcheck="false">
+                <button class="combo-btn" id="maskChev" type="button" data-tip="Your masks" aria-haspopup="listbox" aria-expanded="false"></button>
+                <div class="combo-list" id="maskList" role="listbox" hidden></div>
+              </div>
+              <button class="btn" onclick="$('#maskFile').click()" data-tip="A mask from an image: black blocks the pen.">Add mask</button><input type="file" id="maskFile" accept="image/*" hidden onchange="maskFromImage(this)">
+              <button class="btn ghost" id="maskDel">Delete</button>
+            </div>
+            <p class="hint mts" id="maskInfo"></p>
+            <div class="opt"><div class="tx" data-tip="A corner tab on the tablet for masks and paper."><div class="t1">Mask strip</div></div>
+              <div class="seg maskSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Drag on the preview to move; wheel or pinch to scale. Reset puts it back to full size."><div class="t1">Place</div></div>
+              <div class="row"><button class="btn ghost" id="maskMove" onclick="Scr.toggleMove('mask')">Move</button><button class="btn ghost" id="maskCentre" onclick="maskCentre()">Reset</button></div></div>
+            <div class="opt"><div class="tx" id="maskModeTx"><div class="t1">Grey sets</div></div>
+              <div class="seg" data-key="mask_mode"><button data-v="fade">Opacity</button><button data-v="gate">Pressure</button></div></div>
+            <div class="opt" style="display:block"><div class="range-row"><span data-tip="How strongly grey holds the pen back">Intensity</span><input type="range" min="0" max="2" step="0.05" data-key="mask_strength" data-type="float"><span class="v" id="maskStrV"></span></div></div>
+            <div class="opt" style="display:block"><div class="range-row"><span data-tip="Left: softer greys. Right: towards a hard black and white cut-out.">Contrast</span><input type="range" min="0.25" max="6" step="0.25" data-key="mask_contrast" data-type="float"><span class="v" id="maskConV"></span></div></div>
+            <div class="opt"><div class="tx" data-tip="Invert swaps black and white. Clear empties the mask."><div class="t1">Invert / clear</div></div>
+              <div class="row"><button class="btn ghost" id="maskInv" onclick="maskInvert()">Invert</button><button class="btn ghost" onclick="maskOp('clear')">Clear</button></div></div>
+          </div>
+          <div class="pane">
+            <div class="pane-title">Tracing image</div>
+            <div class="opt"><div class="tx" data-tip="A picture to trace over"><div class="t1">Image</div><div class="t2 clip" id="traceName">None</div></div>
+              <div class="row"><button class="btn" onclick="pickTrace()">Choose…</button><button class="btn ghost" id="traceDel" onclick="setKey('trace_file','').then(refresh)">Remove</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Drag on the preview to move; wheel or pinch to scale. Reset puts it back to full size."><div class="t1">Place</div></div>
+              <div class="row"><button class="btn ghost" id="traceMove" onclick="Scr.toggleMove('trace')">Move</button><button class="btn ghost" onclick="resetTrace()">Reset</button></div></div>
+            <div class="opt" style="display:block"><div class="range-row"><span>Strength</span><input type="range" min="0.1" max="1" step="0.05" data-key="trace_opacity" data-type="float"><span class="v" id="traceV"></span></div></div>
+            <div class="opt"><div class="tx" data-tip="Fingers move and zoom the image on the tablet. Tap the black note there to finish."><div class="t1">Move on tablet</div></div>
+              <label class="switch"><input type="checkbox" data-key="trace_adjust"><span class="track"></span></label></div>
+          </div>
+        </div>
+        <div class="pane home-preview">
         <div class="stage-head">
-          <div class="pane-title">Tablet screen, as it sits on your desk</div>
+          <div class="pane-title" data-tip="As it sits on your desk. Strokes aren't shown.">Tablet screen</div>
           <span class="hint" id="scrHint"></span>
-          <div class="seg" id="scrDrag" title="What dragging on the picture moves"><button data-v="trace" class="on">Move image</button><button data-v="mask">Move mask</button></div>
         </div>
         <div class="preview-wrap stage" id="scrWrap"><canvas id="scrPreview"></canvas></div>
         <div class="row between mts">
           <div class="readout" id="homeReadout"></div>
           <span class="hint" id="scrNote"></span>
         </div>
-      </div>
-      <div class="home-grid mt">
-        <div class="stack">
-          <div class="pane">
-            <div class="pane-title">Tablet screen</div>
-            <div class="opt" style="display:block"><div class="range-row"><span>Trail stays for</span><input type="range" min="250" max="5250" step="250" id="trailR"><span class="v" id="trailV"></span></div>
-              <p class="hint mts">E-ink can't fade smoothly, so a stroke stays for this long after you lift the pen, then clears in one refresh. Slide all the way right for <b>Until cleared</b>: strokes stay until you press <i>Clear the tablet screen</i> below or a <i>Clear ink</i> button on the panel.</p></div>
-            <div class="opt" style="display:block" id="lightRow"><div class="range-row"><span>Front light</span><input type="range" min="0" max="100" step="10" id="lightR"><span class="v" id="lightV"></span></div>
-              <p class="hint mts">Also on the tablet, under the shortcut panel. Your own light level comes back when you unplug.</p></div>
-            <div class="opt"><div class="tx"><div class="t1">Shortcut panels</div><div class="t2">16 buttons on each side, chosen by you. Tap with a finger or the pen. <a onclick="go('panel')">Customise the buttons</a></div></div>
-              <div class="seg" data-key="panel"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="both">Both</button><button data-v="off">Off</button></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Finger gestures</div><div class="t2">Three fingers swipe left: undo, right: redo. Two fingers drag to pan, pinch to zoom.</div></div>
-              <label class="switch"><input type="checkbox" data-key="gestures"><span class="track"></span></label></div>
-            <p class="hint mts">Fingers are ignored while the pen is near the screen, so a resting hand does nothing. <span id="lastAction"></span></p>
-            <div class="row mt"><button class="btn" onclick="api().clear_ink()">Clear the tablet screen</button></div>
-          </div>
-          <div class="pane">
-            <div class="pane-title">Tracing image</div>
-            <div class="opt"><div class="tx"><div class="t1">Tracing image</div><div class="t2 clip" id="traceName">None. Show a photo or sketch under your strokes to trace over.</div></div>
-              <div class="row"><button class="btn" onclick="pickTrace()">Choose…</button><button class="btn ghost" id="traceDel" onclick="setKey('trace_file','').then(refresh)">Remove</button></div></div>
-            <div class="opt" style="display:block"><div class="range-row"><span>Image strength</span><input type="range" min="0.1" max="1" step="0.05" data-key="trace_opacity" data-type="float"><span class="v" id="traceV"></span></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Move and zoom it on the tablet</div><div class="t2">While on, one finger drags the image and two fingers zoom it; gestures pause. It turns on by itself when you choose an image; tap the black note on the tablet to finish. A panel button can do this too ("Move image").</div></div>
-              <div class="row"><button class="btn ghost" onclick="resetTrace()">Centre</button><label class="switch"><input type="checkbox" data-key="trace_adjust"><span class="track"></span></label></div></div>
-          </div>
-        </div>
-        <div class="stack">
-          <div class="pane">
-            <div class="pane-title">Paper</div>
-            <div class="opt"><div class="tx"><div class="t1">Paper</div><div class="t2">Printed under your strokes, on the drawing area only</div></div>
-              <select class="input" data-key="paper" style="width:170px">
-                <option value="plain">Plain</option><option value="lined">Lined</option><option value="squared">Squared</option>
-                <option value="dots">Dots</option><option value="cross">Crosses</option><option value="blueprint">Blueprint (5 × 5)</option>
-                <option value="isometric">Isometric</option></select></div>
-            <div class="opt" style="display:block"><div class="range-row"><span>Line spacing</span><input type="range" min="3" max="15" step="0.5" data-key="paper_mm" data-type="float"><span class="v" id="paperV"></span></div></div>
-          </div>
-          <div class="pane">
-            <div class="pane-title">Pen mask</div>
-            <div class="prof-row">
-              <div class="combo" id="maskCombo">
-                <input class="input" id="maskName" maxlength="24" placeholder="None" title="Click the name to rename this mask" autocomplete="off" spellcheck="false">
-                <button class="combo-btn" id="maskChev" type="button" title="Your masks: switch between them here or from the corner tab on the tablet" aria-haspopup="listbox" aria-expanded="false"></button>
-                <div class="combo-list" id="maskList" role="listbox" hidden></div>
-              </div>
-              <button class="btn" onclick="$('#maskFile').click()" title="A new mask from an image, read in greyscale: black masks, white stays open">Add mask</button><input type="file" id="maskFile" accept="image/*" hidden onchange="maskFromImage(this)">
-              <button class="btn ghost" id="maskDel">Delete</button>
-            </div>
-            <p class="hint mts">Shaded parts of the tablet screen hold the pen back, like a stencil: dark ignores it, white leaves it alone, grey is in between. Pick None to switch the mask off. <span id="maskInfo"></span></p>
-            <div class="opt"><div class="tx"><div class="t1">Mask shortcut on the tablet</div><div class="t2">A corner tab at the top of that side, next to a panel there. Tap it to list your masks, then tap one to switch, or None, or Invert.</div></div>
-              <div class="seg maskSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
-            <div class="opt" style="display:block"><div class="range-row"><span>Contrast</span><input type="range" min="0.25" max="6" step="0.25" data-key="mask_contrast" data-type="float"><span class="v" id="maskConV"></span></div>
-              <p class="hint mts">Left of the middle softens the mask towards mid grey; right pushes greys to black or white, until it's a hard cut-out.</p></div>
-            <div class="opt"><div class="tx"><div class="t1">Grey areas</div><div class="t2" id="maskModeHint"></div></div>
-              <div class="seg" data-key="mask_mode"><button data-v="fade">Fade</button><button data-v="gate">Firmer press</button></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Invert or clear</div><div class="t2">Invert swaps black and white, and pressing it again swaps them back. The tablet has the same toggle under its mask corner tab.</div></div>
-              <div class="row"><button class="btn ghost" id="maskInv" onclick="maskInvert()">Invert</button><button class="btn ghost" onclick="maskOp('clear')">Clear</button></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Position</div><div class="t2">Drag the mask on the tablet picture above to move it; the mouse wheel or a pinch zooms it. The tablet follows when you let go.</div></div>
-              <button class="btn ghost" id="maskCentre" onclick="maskCentre()">Centre</button></div>
-          </div>
-          <div class="pane">
-            <div class="pane-title">Shapes</div>
-            <div class="opt"><div class="tx"><div class="t1">Hold for</div><div class="t2">Draw a line, circle, rectangle or triangle and keep the pen still: it becomes a clean shape. The shapes button in the title bar turns it on and off.</div></div>
-              <div class="seg" data-key="snap_hold_ms"><button data-v="400">0.4 s</button><button data-v="600">0.6 s</button><button data-v="900">0.9 s</button></div></div>
-            <div class="field mt"><span class="lbl">Only in these apps (program names, comma separated)</span><input class="input mono" data-key="snap_apps"></div>
-            <p class="hint mts">The app swaps your stroke by pressing Ctrl+Z and drawing the clean shape, so it only snaps in drawing programs where Ctrl+Z undoes one stroke. <span id="snapLast"></span></p>
-          </div>
         </div>
       </div>
     </section>
 
-    <!-- CALIBRATE -->
+    <!-- CALIBRATE: where the pen lands and how it feels; settings on the left, the tablet picture fixed on the right -->
     <section class="view" id="view-calibrate">
-      <h1>Calibrate</h1>
-      <p class="lead">Calibration teaches the app exactly where your pen touches, and which way round the tablet sits on your desk. Do it once, and again if you move the tablet to a different position.</p>
-      <div class="pane mt2">
-        <div class="pane-title">Calibration</div>
-        <div class="cal-head">
-          <div id="calSaved" class="hint"></div>
-          <button class="btn acc lg" id="calOpen" onclick="Cal.open()">Calibrate</button>
-        </div>
-        <div id="calPageWarn"></div>
-      </div>
-      <div class="pane mt">
-        <div class="pane-title">Screen area</div>
-        <p class="hint">Which display the pen draws on, how the tablet fits it, and the part of the tablet you use. Drag a box on the picture to use only part of it.</p>
-        <div class="area-grid mt">
-          <div>
-            <div class="preview-wrap drag area-pic" id="mapWrap"><canvas id="mapPreview"></canvas></div>
-            <div class="row between mts">
-              <div class="legend"><span><i style="background:var(--accent2-b)"></i>reaches your display</span><span><i style="border:1.5px dashed var(--accent)"></i>active area</span></div>
-              <span class="hint" id="dragHint"></span>
+      <div class="home-split">
+        <div class="stack home-set">
+          <div class="pane">
+            <div class="pane-title" data-tip="Redo it if you move the tablet.">Calibration</div>
+            <div class="cal-head">
+              <div id="calSaved" class="hint"></div>
+              <button class="btn acc" id="calOpen" onclick="Cal.open()">Calibrate</button>
             </div>
-            <div class="readout ratios" id="ratios"></div>
+            <div id="calPageWarn"></div>
           </div>
-          <div>
+          <div class="pane">
+            <div class="pane-title" data-tip="Which display the pen reaches. Drag a box on the picture to use part of the tablet.">Screen area</div>
             <select class="input" data-key="monitor" data-type="int" id="monSel"></select>
-            <div class="opt mt"><div class="tx"><div class="t1">Fit</div><div class="t2" id="fitHint"></div></div>
+            <div class="opt mt"><div class="tx" id="fitTx"><div class="t1">Fit</div></div>
               <div class="seg" data-key="fit">
-                <button data-v="crop">Fill display</button><button data-v="letterbox">Whole tablet</button><button data-v="stretch">Stretch</button>
+                <button data-v="crop">Fill</button><button data-v="letterbox">Whole tablet</button><button data-v="stretch">Stretch</button>
               </div></div>
             <div class="opt"><div class="tx"><div class="t1">Active area</div><div class="t2 mono" id="areaText"></div></div>
               <div class="row">
-                <button class="btn" onclick="setArea([0,0,1,1])">Whole tablet</button>
-                <button class="btn" onclick="setArea([0.1,0.1,0.9,0.9])">Inside the targets</button>
+                <button class="btn" onclick="setArea([0,0,1,1])" data-tip="The whole tablet">Whole</button>
+                <button class="btn" onclick="setArea([0.1,0.1,0.9,0.9])" data-tip="Inside the calibration targets">Inner</button>
               </div></div>
+            <div class="readout ratios" id="ratios"></div>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- PEN -->
-    <section class="view" id="view-pen">
-      <h1>Pen feel</h1>
-      <p class="lead">Shape how pressure comes through, and check the whole range reaches your apps.</p>
-      <div class="grid2 mt2">
-        <div class="stack">
-        <div class="pane">
-          <div class="pane-title">Pressure curve</div>
-          <canvas class="curve" id="curve"></canvas>
-          <div class="range-row mt"><span>Response</span><input type="range" min="0.3" max="3" step="0.05" data-key="gamma" data-type="float"><span class="v" id="gammaV"></span></div>
-          <div class="scale" style="margin-left:144px;margin-right:78px"><span>softer: light touch draws dark</span><span>firmer</span></div>
-          <div class="range-row mt"><span>Ignore light touch</span><input type="range" min="0" max="0.3" step="0.01" data-key="threshold" data-type="float"><span class="v" id="threshV"></span></div>
-        </div>
-        </div>
-        <div class="stack">
           <div class="pane">
-            <div class="pane-title">Options</div>
-            <div class="opt"><div class="tx"><div class="t1">Send pen tilt</div><div class="t2">For brushes that respond to angle</div></div>
+            <div class="pane-title" data-tip="How pressure reaches your apps.">Pressure</div>
+            <canvas class="curve" id="curve"></canvas>
+            <div class="range-row mt"><span data-tip="Left: softer, a light touch draws dark. Right: firmer.">Response</span><input type="range" min="0.3" max="3" step="0.05" data-key="gamma" data-type="float"><span class="v" id="gammaV"></span></div>
+            <div class="range-row mt"><span data-tip="Pressure below this draws nothing">Ignore light</span><input type="range" min="0" max="0.3" step="0.01" data-key="threshold" data-type="float"><span class="v" id="threshV"></span></div>
+            <div class="opt mt" style="display:block"><div class="row between"><span class="hint" data-tip="Press hard once. The bar should get near the end.">Full range</span><button class="btn ghost" onclick="api().reset_peak()">Reset</button></div>
+              <div class="meter mts"><i id="peakBar"></i></div>
+              <div class="readout mts" id="peakText" style="margin:0"></div></div>
+            <div class="hint mts" data-tip="Photoshop: turn on Pen Pressure. Krita, Clip Studio: use Windows Ink."><svg class="ic"><use href="#i-info"/></svg> No pressure in your app?</div>
+          </div>
+          <div class="pane">
+            <div class="pane-title">Pen</div>
+            <div class="opt"><div class="tx" data-tip="For brushes that respond to the pen's angle"><div class="t1">Tilt</div></div>
               <label class="switch"><input type="checkbox" data-key="tilt"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx"><div class="t1">Lift the pen at the edge</div><div class="t2">A stroke that runs off the active area stops instead of drawing along the screen edge</div></div>
+            <div class="opt"><div class="tx" data-tip="A stroke stops at the edge of the active area."><div class="t1">Lift at edge</div></div>
               <label class="switch"><input type="checkbox" data-key="edge_lift"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx"><div class="t1">Windows pen feedback</div><div class="t2">Ripples and cursor effects Windows draws</div></div>
+            <div class="opt"><div class="tx" data-tip="Ripples and cursor effects Windows draws"><div class="t1">Feedback</div></div>
               <select class="input" data-key="feedback" style="width:150px"><option value="indirect">Cursor only</option><option value="default">Windows default</option><option value="none">None</option></select></div>
           </div>
-          <div class="pane">
-            <div class="pane-title">Full-range check</div>
-            <p class="hint">Press as hard as you comfortably can once. The bar should get near the end.</p>
-            <div class="meter mt"><i id="peakBar"></i></div>
-            <div class="row between mts"><span class="readout" id="peakText" style="margin:0"></span><button class="btn ghost" onclick="api().reset_peak()">Reset</button></div>
+        </div>
+        <div class="pane home-preview">
+          <div class="stage-head">
+            <div class="pane-title">Tablet on your display</div>
+            <span class="hint" id="dragHint"></span>
           </div>
-          <div class="note"><svg><use href="#i-info"/></svg><div>Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input.</div></div>
+          <div class="preview-wrap drag stage" id="mapWrap"><canvas id="mapPreview"></canvas></div>
+          <div class="row between mts">
+            <div class="legend"><span><i style="background:var(--accent2-b)"></i>reaches your display</span><span><i style="border:1.5px dashed var(--accent)"></i>active area</span></div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- PANEL BUTTONS -->
     <section class="view" id="view-panel">
-      <h1>Panel &amp; gestures</h1>
-      <p class="lead">These are the panels exactly as the tablet draws them, one for each side. Click a button to change it, drag one onto another to swap them. Changes reach the tablet straight away.</p>
-      <div class="pe mt2">
-        <div class="stack">
-          <div class="pane pe-mock">
-            <div class="row between"><div class="pane-title">On the tablet</div>
-              <div class="seg" id="pmSide" title="Which panel to edit"><button data-v="left" class="on">Left panel</button><button data-v="right">Right panel</button></div></div>
-            <div class="prof-row">
-              <select class="input" id="profSel" title="Button sets: switch between them with the arrows on the tablet"></select>
-              <input class="input" id="profName" maxlength="24" placeholder="Profile name" title="Rename this profile">
-              <button class="btn" id="profNew" title="A new profile with the default buttons">New</button>
-              <button class="btn" id="profDup" title="A copy of this profile">Duplicate</button>
-              <button class="btn ghost" id="profDel">Delete</button>
-            </div>
-            <div class="pm-wrap" id="pmWrap"></div>
-            <div class="row between mts">
-              <span class="hint" id="pmNote"></span>
-              <button class="btn ghost" id="pmReset">Restore defaults</button>
-            </div>
-          </div>
-          <div class="pane">
+      <div class="home-split">
+        <div class="stack home-set">
+          <div class="seg subnav" id="peTabs"><button data-v="panels" class="on">Shortcut panels</button><button data-v="gestures">Gestures</button></div>
+          <div class="pane pe-panels">
             <div class="pane-title">Panels</div>
-            <div class="opt"><div class="tx"><div class="t1">Shown</div><div class="t2">Either side, both, or none. The profile arrows switch both panels together.</div></div>
+            <div class="opt"><div class="tx" data-tip="16 buttons a side. Profile arrows switch both. The corner tab on the tablet folds a panel away."><div class="t1">Shortcuts</div></div>
               <div class="seg" data-key="panel"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="both">Both</button><button data-v="off">Off</button></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Unfolded</div><div class="t2">The tab in each top corner folds that panel away for more drawing room</div></div>
-              <div class="row"><span class="hint">Left</span><label class="switch"><input type="checkbox" data-key="panel_open"><span class="track"></span></label>
-                <span class="hint">Right</span><label class="switch"><input type="checkbox" data-key="panel_open_right"><span class="track"></span></label></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Mask strip</div><div class="t2">Your masks as a corner tab, inside a panel on the same side</div></div>
-              <div class="seg maskSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Finger gestures</div><div class="t2">3 fingers swipe: undo / redo. 2 fingers: pan, pinch zoom</div></div>
-              <label class="switch"><input type="checkbox" data-key="gestures"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx"><div class="t1">Fingers in this profile</div><div class="t2"><b>Shortcuts</b> turn gestures into keys for your drawing app. <b>Windows touch</b> makes the tablet a touchscreen: apps scroll with inertia, pinch and rotate by themselves. The pen still mutes fingers while it's near.</div></div>
-              <div class="seg" id="profTouch"><button data-v="shortcuts">Shortcuts</button><button data-v="windows">Windows touch</button></div></div>
-            <div class="opt"><div class="tx"><div class="t1">Rotate key</div><div class="t2">Five fingers twisted rotate the canvas: this key is held while the app drags round the window centre. Photoshop: <code>r</code>, Krita / Clip Studio: <code>shift+space</code></div></div>
-              <input class="input mono" data-key="rotate_keys" style="width:130px"></div>
-            <div class="opt"><div class="tx"><div class="t1">Swipe step</div><div class="t2">How far a 3-finger swipe goes for each undo or redo; drag back to take steps back</div></div>
-              <div class="seg" data-key="swipe_step"><button data-v="70">Short</button><button data-v="100">Medium</button><button data-v="150">Long</button></div></div>
           </div>
-        </div>
-        <div class="stack">
-          <div class="pane" id="peEditor">
+          <div class="pane pe-panels" id="peEditor">
             <div class="pane-title" id="peTitle">Button</div>
             <div class="field"><span class="lbl">Title on the button</span><input class="input" id="peName" maxlength="14" placeholder="e.g. Save"></div>
             <div class="field mt"><span class="lbl">What it does</span>
               <div class="kinds" id="peKinds">
-                <button data-k="shortcut"><b>Shortcut</b><span>Taps a key or combination</span></button>
-                <button data-k="hold"><b>Hold key</b><span>Held while you touch it; a quick tap locks it</span></button>
-                <button data-k="pen"><b>Pen on/off</b><span>Pauses the pen in Windows</span></button>
-                <button data-k="snap"><b>Shapes on/off</b><span>Hold-to-snap shapes</span></button>
-                <button data-k="clear"><b>Clear ink</b><span>Only useful if trails are set to stay</span></button>
-                <button data-k="trace"><b>Move image</b><span>Fingers move and zoom the tracing image</span></button>
-                <button data-k="light"><b>Light full / back</b><span>Front light to full for tracing, tap again for your level</span></button>
-                <button data-k="mask"><b>Invert mask</b><span>Swaps black and white in the mask in use</span></button>
-                <button data-k="none"><b>Empty</b><span>Leaves a gap</span></button>
+                <button data-k="shortcut" data-tip="Taps a key or combination"><b>Shortcut</b></button>
+                <button data-k="hold" data-tip="Held while you touch it; a quick tap locks it"><b>Hold key</b></button>
+                <button data-k="pen" data-tip="Pauses the pen in Windows"><b>Pen on/off</b></button>
+                <button data-k="snap" data-tip="Hold-to-snap shapes"><b>Shapes on/off</b></button>
+                <button data-k="clear" data-tip="Only useful if trails are set to stay"><b>Clear ink</b></button>
+                <button data-k="trace" data-tip="Fingers move and zoom the tracing image"><b>Move image</b></button>
+                <button data-k="light" data-tip="Light to full, tap again for your level"><b>Light full / back</b></button>
+                <button data-k="mask" data-tip="Swaps black and white in the mask in use"><b>Invert mask</b></button>
+                <button data-k="none" data-tip="Leaves a gap"><b>Empty</b></button>
               </div>
             </div>
             <div class="field mt" id="peKeysRow"><span class="lbl">Key or combination</span>
@@ -293,10 +218,40 @@
             <div class="field mt"><span class="lbl">Or pick a common one</span>
               <select class="input" id="pePreset"></select></div>
           </div>
-          <div class="pane">
-            <div class="pane-title">Tap gestures</div>
-            <p class="hint">Quick taps anywhere on the drawing area. Leave the keys empty to switch one off. Fingers are ignored while the pen is near.</p>
+          <div class="pane pe-gestures" hidden>
+            <div class="pane-title">Finger gestures</div>
+            <div class="opt"><div class="tx" data-tip="3 fingers: undo / redo. 2: pan, zoom. 5: rotate, reset, clear. Off while the pen is near."><div class="t1">On</div></div>
+              <label class="switch"><input type="checkbox" data-key="gestures"><span class="track"></span></label></div>
+            <div class="opt"><div class="tx" data-tip="Shortcuts: gestures send keys. Windows touch: the tablet acts as a touchscreen. Saved with the profile."><div class="t1">Finger mode</div></div>
+              <div class="seg" id="profTouch"><button data-v="shortcuts">Shortcuts</button><button data-v="windows">Windows touch</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Held for a 5-finger twist. Photoshop: r. Krita, Clip Studio: shift+space."><div class="t1">Rotate key</div></div>
+              <input class="input mono" data-key="rotate_keys" style="width:130px"></div>
+            <div class="opt"><div class="tx" data-tip="Swipe distance for each undo or redo."><div class="t1">Swipe step</div></div>
+              <div class="seg" data-key="swipe_step"><button data-v="70">Short</button><button data-v="100">Medium</button><button data-v="150">Long</button></div></div>
+            <div class="row between mt"><span class="hint" id="lastAction"></span>
+              <button class="btn" onclick="api().clear_ink(); Ink.clear()" data-tip="Wipes all ink from the tablet screen">Clear the tablet screen</button></div>
+          </div>
+          <div class="pane pe-gestures" hidden>
+            <div class="pane-title" data-tip="Quick taps on the drawing area. Empty keys switch one off.">Tap gestures</div>
             <div class="taps mt" id="tapList"></div>
+          </div>
+        </div>
+        <div class="pane home-preview pe-preview">
+            <div class="prof-row">
+              <div class="seg" id="pmSide" data-tip="Which panel to edit"><button data-v="left" class="on">Left</button><button data-v="right">Right</button></div>
+              <div class="combo" id="profCombo">
+                <input class="input" id="profName" maxlength="24" readonly data-tip="Click for your profiles, double-click to rename" autocomplete="off" spellcheck="false">
+                <button class="combo-btn" id="profChev" type="button" data-tip="Your profiles" aria-haspopup="listbox" aria-expanded="false"></button>
+                <div class="combo-list" id="profList" role="listbox" hidden></div>
+              </div>
+              <button class="btn" id="profNew" data-tip="A new profile with the default buttons">New</button>
+              <button class="btn" id="profDup" data-tip="A copy of this profile">Duplicate</button>
+              <button class="btn ghost" id="profDel">Delete</button>
+            </div>
+          <div class="pm-wrap" id="pmWrap"></div>
+          <div class="row between mts">
+            <span class="hint" id="pmNote" data-tip="Click a button to edit it, drag one onto another to swap."></span>
+            <button class="btn ghost" id="pmReset">Restore defaults</button>
           </div>
         </div>
       </div>
@@ -304,54 +259,63 @@
 
     <!-- SETTINGS -->
     <section class="view" id="view-settings">
-      <h1>Settings</h1>
-      <div class="grid2 mt2">
-        <div class="stack">
+      <div class="home-split">
+        <div class="stack home-set">
           <div class="pane">
             <div class="pane-title">Connection</div>
-            <div class="stack">
+            <div class="pair">
               <div class="field"><span class="lbl">Tablet address</span><input class="input mono" data-key="host"></div>
               <div class="field"><span class="lbl">User</span><input class="input mono" data-key="user"></div>
-              <div class="field"><span class="lbl">Key file (optional)</span><input class="input mono" data-key="key" placeholder="the app's own key is used by default"></div>
-              <div class="row"><button class="btn" id="btnConnect">Connect now</button><button class="btn ghost" id="btnDisconnect">Disconnect</button></div>
-              <div class="opt"><div class="tx"><div class="t1">Connect over Wi-Fi too</div><div class="t2" id="wifiInfo"></div></div>
-                <label class="switch"><input type="checkbox" id="wifiOn"><span class="track"></span></label></div>
-              <p class="hint">This switches on reMarkable's own SSH over Wi-Fi on the tablet (with the cable plugged in), so the tablet's login is reachable on your network. The app only logs in with its key and only to this tablet, but the tablet's password works there too, so use it on networks you trust, and switch it off elsewhere. Wi-Fi adds a little lag compared with the cable.</p>
             </div>
+            <div class="field mt"><span class="lbl" data-tip="Optional; the app's own key by default">Key file</span><input class="input mono" data-key="key" placeholder="the app's own key"></div>
           </div>
           <div class="pane">
-            <div class="pane-title">Tablet log</div>
-            <div class="log" id="scrLog"></div>
-          </div>
-        </div>
-        <div class="stack">
-          <div class="pane">
-            <div class="pane-title">Behaviour</div>
-            <div class="opt"><div class="tx"><div class="t1">Keep running in the tray when the window is closed</div><div class="t2">The pen keeps working. Open or exit Paper Tablet from its tray icon.</div></div>
+            <div class="pane-title">App</div>
+            <div class="opt"><div class="tx" data-tip="Starts as soon as the cable is in and the tablet answers."><div class="t1">Connect when plugged in</div></div>
+              <label class="switch"><input type="checkbox" data-key="auto_connect"><span class="track"></span></label></div>
+            <div class="opt"><div class="tx" data-tip="Sends the pen to this computer right after connecting. Unplug to get your notebooks back."><div class="t1">Pen on when connected</div></div>
+              <label class="switch"><input type="checkbox" data-key="auto_output"><span class="track"></span></label></div>
+            <div class="opt"><div class="tx" data-tip="Closing the window keeps the pen working."><div class="t1">Close to tray</div></div>
               <label class="switch"><input type="checkbox" data-key="close_to_tray"><span class="track"></span></label></div>
             <details class="disclose">
               <summary><div class="tx"><div class="t1">Theme</div><div class="t2" id="themeName"></div></div>
                 <svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3"/></svg></summary>
               <div class="themes" id="themes" role="radiogroup" aria-label="Theme"></div>
             </details>
-            <div class="opt"><div class="tx"><div class="t1">Setup guide</div><div class="t2">Walk through developer mode and the cable again</div></div>
-              <button class="btn" onclick="Wizard.open()">Open</button></div>
-            <div class="opt"><div class="tx"><div class="t1">About</div><div class="t2">Paper Tablet <span id="appVersion"></span>, for reMarkable Paper Pro (reMarkable 2 and 1 in beta). Not affiliated with reMarkable AS. Fonts: IBM Plex (SIL OFL).</div></div></div>
+            <details class="disclose">
+              <summary><div class="tx" data-tip="The opening animation. Plays at the next start."><div class="t1">Splash</div><div class="t2" id="splashName"></div></div>
+                <svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3"/></svg></summary>
+              <div class="themes" id="splashes" role="radiogroup" aria-label="Splash"></div>
+            </details>
+            <div class="opt"><div class="tx" data-tip="For reMarkable Paper Pro; rM2 and rM1 in beta. Not affiliated with reMarkable AS."><div class="t1">About</div><div class="t2">ReDrawable <span id="appVersion"></span></div></div></div>
           </div>
-          <div class="pane">
-            <div class="pane-title">When you plug in</div>
-            <div class="opt"><div class="tx"><div class="t1">Connect automatically</div></div>
-              <label class="switch"><input type="checkbox" data-key="auto_connect"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx"><div class="t1">Turn on the pen</div></div>
-              <label class="switch"><input type="checkbox" data-key="auto_output"><span class="track"></span></label></div>
-            <p class="hint mts">With these on, plugging in is all it takes. Unplug and the tablet goes straight back to your notebooks.</p>
-          </div>
+        </div>
+        <div class="pane home-preview log-pane">
+          <div class="pane-title">Tablet log</div>
+          <div class="log" id="scrLog"></div>
         </div>
       </div>
     </section>
 
   </div></main>
 </div>
+<footer class="sbar" id="sbar">
+  <i class="dot" id="sbDot"></i>
+  <b id="sbName">Not connected</b>
+  <span id="sbMeta"></span>
+  <span class="sb-msg" id="sbMsg"></span>
+  <span class="grow"></span>
+  <span class="sb-acts">
+    <label class="sb-wifi" data-tip="The pen draws in Windows">Pen
+      <span class="switch sm"><input type="checkbox" id="sbPen"><span class="track"></span></span></label>
+    <label class="sb-wifi" data-tip="Hold the pen still at the end of a stroke to snap it to a clean shape">Shapes
+      <span class="switch sm"><input type="checkbox" id="sbSnap"><span class="track"></span></span></label>
+    <span class="sb-sep"></span>
+    <label class="sb-wifi" data-tip="Connect over Wi-Fi too. Turn on with the cable in; trusted networks only.">Wi-Fi
+      <span class="switch sm"><input type="checkbox" id="sbWifi"><span class="track"></span></span></label>
+    <button class="btn" id="sbConn">Connect</button>
+  </span>
+</footer>
 
 <!-- SETUP GUIDE -->
 <div class="overlay" id="wizard">

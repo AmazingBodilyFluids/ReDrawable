@@ -1,16 +1,16 @@
-; Paper Tablet: Windows installer (Inno Setup 6). Build it with installer\build.ps1, which
+; ReDrawable: Windows installer (Inno Setup 6). Build it with installer\build.ps1, which
 ; stages build\app and build\runtime first and passes /DAppVersion from pc\version.py.
 ;
-; Per-user install, no admin rights: %LOCALAPPDATA%\Programs\Paper Tablet unless the user picks
+; Per-user install, no admin rights: %LOCALAPPDATA%\Programs\ReDrawable unless the user picks
 ; another folder they can write to. Ships its own
 ; Python runtime; the only system prerequisite is the WebView2 runtime, installed only if missing.
-; Settings (%APPDATA%\PaperTablet) and the SSH key (~\.ssh\rmtablet_ed25519) are never touched.
+; Settings (%APPDATA%\ReDrawable) and the SSH key (~\.ssh\rmtablet_ed25519) are never touched.
 
 #ifndef AppVersion
   #error Run installer\build.ps1 (it passes /DAppVersion)
 #endif
-#define AppName "Paper Tablet"
-#define AppExe "runtime\python\Paper Tablet.exe"
+#define AppName "ReDrawable"
+#define AppExe "runtime\python\ReDrawable.exe"
 
 [Setup]
 AppId={{6F3B2C1E-8A4D-4E57-9B0C-2D7A5E9F1C38}
@@ -22,7 +22,7 @@ AppPublisherURL=https://github.com/AmazingBodilyFluids/paper-tablet
 DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-; The user may pick the folder; browsing appends "\Paper Tablet", and an upgrade reuses the
+; The user may pick the folder; browsing appends "\ReDrawable", and an upgrade reuses the
 ; previous folder.
 DisableDirPage=no
 PrivilegesRequired=lowest
@@ -31,10 +31,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 ; The app holds this mutex while it runs (app.py, already_running): setup and uninstall ask
 ; the user to close it first.
-AppMutex=Local\PaperTablet.SingleInstance
+AppMutex=Local\ReDrawable.SingleInstance,Local\PaperTablet.SingleInstance
 OutputDir=dist
-OutputBaseFilename=PaperTablet-Setup-{#AppVersion}
-SetupIconFile=..\pc\icons\paper-tablet.ico
+OutputBaseFilename=ReDrawable-Setup-{#AppVersion}
+SetupIconFile=..\pc\icons\redrawable.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 VersionInfoVersion={#AppVersion}
@@ -58,6 +58,10 @@ Source: "build\prereqs\MicrosoftEdgeWebView2Setup.exe"; DestDir: "{tmp}"; Flags:
 ; Only over an earlier install (its marker file is there), never in a folder of someone else's.
 Type: filesandordirs; Name: "{app}\pc"; Check: IsUpgrade
 Type: filesandordirs; Name: "{app}\tablet"; Check: IsUpgrade
+; The shortcuts of an install from before the rename to ReDrawable (same AppId, so this upgrades it).
+Type: files; Name: "{autoprograms}\Paper Tablet\Paper Tablet.lnk"
+Type: dirifempty; Name: "{autoprograms}\Paper Tablet"
+Type: files; Name: "{userdesktop}\Paper Tablet.lnk"
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: """{app}\pc\app.py"""; WorkingDir: "{app}"
@@ -70,7 +74,7 @@ Filename: "{app}\{#AppExe}"; Parameters: """{app}\pc\app.py"""; WorkingDir: "{ap
     Description: "Start {#AppName}"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
-; Python writes __pycache__ folders at run time, so remove Paper Tablet's own folders whole.
+; Python writes __pycache__ folders at run time, so remove ReDrawable's own folders whole.
 ; Only these: the user may have chosen a folder that holds other files too. {app} itself goes
 ; only if it ends up empty.
 Type: filesandordirs; Name: "{app}\pc"
@@ -104,7 +108,7 @@ var
 begin
   while (not DirExists(Dir)) and (ExtractFileDir(Dir) <> Dir) do
     Dir := ExtractFileDir(Dir);
-  Probe := AddBackslash(Dir) + 'paper-tablet-write-test.tmp';
+  Probe := AddBackslash(Dir) + 'redrawable-write-test.tmp';
   Result := SaveStringToFile(Probe, '', False);
   if Result then
     DeleteFile(Probe);
@@ -115,9 +119,9 @@ begin
   Result := True;
   if (CurPageID = wpSelectDir) and not CanWriteTo(WizardDirValue) then
   begin
-    SuppressibleMsgBox('Paper Tablet can''t be installed in' #13#10 + WizardDirValue + #13#10#13#10 +
+    SuppressibleMsgBox('ReDrawable can''t be installed in' #13#10 + WizardDirValue + #13#10#13#10 +
       'That folder needs administrator rights. Choose a folder in your user profile or on another drive, ' +
-      'for example D:\Apps\Paper Tablet.', mbError, MB_OK, IDOK);
+      'for example D:\Apps\ReDrawable.', mbError, MB_OK, IDOK);
     Result := False;
   end;
 end;

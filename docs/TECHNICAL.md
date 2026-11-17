@@ -1,4 +1,4 @@
-# Paper Tablet: technical notes
+# ReDrawable: technical notes
 
 How it works under the hood, what was measured on real hardware, and the command-line tool.
 For using the app, see the [README](../README.md).
