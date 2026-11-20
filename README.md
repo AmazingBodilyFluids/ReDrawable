@@ -1,91 +1,127 @@
 # ReDrawable
-
-**Use a reMarkable Paper Pro as a pressure-sensitive pen tablet for Windows.** The reMarkable 2 and 1
+**Turn a reMarkable Paper Pro into a pressure-sensitive pen tablet for Windows.** The reMarkable 2 and 1
 are supported in beta.
 
-Plug the tablet into your PC with its USB cable and draw in Photoshop, Krita, Clip Studio, Illustrator or any
-Windows Ink app. You get pressure, tilt, hover and the eraser end. The tablet's own screen shows your
-strokes as a fading trail. A side panel puts your shortcuts under your other hand, and finger gestures
-handle undo, redo, pan and zoom.
+Plug the tablet in with its USB cable and draw in Photoshop, Krita, Clip Studio, Illustrator or any Windows Ink
+app. You get pressure, tilt, hover and the eraser end. The tablet's own screen becomes your drawing surface:
+paper patterns, a tracing image, pen masks and shortcut panels, with finger gestures for undo, redo, pan, zoom
+and rotate.
 
-![ReDrawable on the reMarkable Paper Pro: shortcut panel and drawing area](docs/screenshots/tablet.png)
+**[Download ReDrawable](../../releases/latest)**: an installer, or a portable zip that runs from any folder.
 
-![The ReDrawable desktop app](docs/screenshots/home.png)
+![The ReDrawable desktop app with a perspective sketch as the tracing image on squared paper](docs/screenshots/home.png)
 
 > ReDrawable is an independent project. It is not made, endorsed or supported by reMarkable AS.
 > It needs **developer mode** on the tablet, which is your own decision; read the safety notes below.
 
-## Features
 
-- **A real Windows pen.** It uses Windows' own pen input (Windows Ink), so apps see a pen, not a mouse,
-  and no driver is needed. You get 4096 pressure levels, tilt, hover and the eraser end.
-- **Plug and play.** Plug in and the pen and the tablet screen start. Unplug and the tablet goes back to your
-  notebooks within seconds. Nothing is installed permanently on the tablet.
-- **Calibration** with 9, 4 or 0 targets. It learns exactly where the pen lands and which way round the
-  tablet sits on your desk.
-- **Screen area (Calibrate).** A picture of the tablet as it sits on your desk. Pick a display, choose
-  fill / whole tablet / stretch, and drag out the part of the tablet you want to use; the picture labels the
-  active area's and the display's aspect ratios. A stroke that runs off that part lifts, instead of drawing
-  along the screen edge.
-- **Pen feel.** A pressure curve, a light-touch threshold, a full-range check, and tilt on or off.
-- **Hold to snap.** Draw a line, circle, ellipse, triangle, rectangle or polygon, then hold the pen still and
-  it becomes a clean shape, as in the tablet's own notebooks.
-- **Shortcut panel on the tablet.** 16 buttons you design yourself in the desktop app: any title and any key
-  combination. A button can tap its keys or hold them (for Space-to-pan, Alt-to-pick and the like).
-  The panel folds away from its corner tab when you want the whole surface. Keep as many named button sets
-  (profiles) as you like, for example one per app, and switch with the arrows at the top of the panel.
-- **Paper and tracing on the tablet screen.** Lined, squared, dot, cross, blueprint or isometric paper under
-  your strokes, and a tracing image you can move and zoom with your fingers, or by dragging it on Home, which
-  shows what the app tells the tablet screen to draw (paper, image, mask, panel and tabs) with the live pen. The front light can go to full
-  while you trace, and comes back to your level afterwards.
-- **Pen mask (Home).** Works like a stencil in shades of grey: black ignores the pen, white leaves it
-  alone, and grey either fades the pressure (mid grey gives half) or needs a firmer press. Add a mask from any
-  image, read in greyscale, then place and zoom it on the tablet picture on Home, with a contrast setting and an
-  Invert toggle on top. Keep as many named masks as you like and switch between them, or invert the one in use,
-  from a corner tab on the tablet, on the side away from the shortcut panel.
-- **Wi-Fi.** Plugged in once, the app can switch on reMarkable's own SSH over Wi-Fi and from then on find the
-  tablet on your network when the cable is out (Settings). It only logs in to the tablet whose key it saw on the
-  cable. The cable stays the faster link.
-- **Finger gestures:**
-  - Three-finger swipe for undo and redo, one step per stretch of the drag, live as you swipe.
-  - Two-finger drag to pan and pinch to zoom; five-finger twist to rotate the canvas.
-  - Tap gestures you can assign (one-finger triple tap = new layer by default).
-  - A Finger gestures button at the foot of the panel lists them all on the tablet.
+## What it does
 
-  Fingers are ignored while the pen is near the screen, and palm-sized contacts are ignored always, so a
-  resting hand does nothing.
 
-| | |
-|---|---|
-| ![Panel & gestures editor](docs/screenshots/panel.png) | ![Calibration](docs/screenshots/calibrate.png) |
-| ![Pen feel](docs/screenshots/pen.png) | ![Screen area](docs/screenshots/mapping.png) |
+### A real Windows pen
+
+ReDrawable uses Windows' own pen input (Windows Ink), so apps see a pen, not a mouse, and no driver is needed.
+4096 pressure levels, tilt, hover and the eraser end, at about 500 reports a second. Plug in and the pen and the
+tablet screen start; unplug and the tablet goes back to your notebooks within seconds. Nothing is installed
+permanently on the tablet.
+
+
+### Shortcut panels with Photoshop presets
+
+One panel on each side of the tablet, or just one, or none, with 16 buttons each. A button can tap a shortcut,
+hold a key while your finger stays on it (Space to pan, Alt to pick), or switch the pen, shapes, front light or
+mask. Keep named button sets for each app and switch with the arrows at the top of the panel. Photography,
+Typography, Design and Art sets for Photoshop come with it, and *Presets* brings back any you delete. Each
+panel folds away from its corner tab when you want the whole surface.
+
+![Panel & gestures: both shortcut panels on a live picture of the tablet](docs/screenshots/panel.png)
+
+
+### Finger gestures
+
+Three-finger swipe for undo and redo, two fingers to pan and pinch to zoom, a five-finger twist to rotate the
+canvas, and tap gestures you can assign. The picture on *Panel & gestures* shows your fingers live, and a
+small duck acts out each gesture as the tablet sends it. Fingers are ignored while the pen is near the screen,
+and palm-sized contacts are always ignored, so a resting hand does nothing.
+
+![Finger rings and the gesture duck showing a five-finger rotate](docs/screenshots/gestures.png)
+
+
+### Paper patterns
+
+Lined, squared, dots, crosses, isometric or blueprint paper under your strokes, at the spacing you pick in
+millimetres. Switch it from the app or from the tablet itself.
+
+![The six paper patterns on the tablet screen](docs/screenshots/patterns.png)
+
+
+### Tracing images
+
+Put a photo or sketch under your strokes and set how strongly it shows. Move and zoom it with your fingers on
+the tablet, or by dragging it on the tablet picture in the app. The front light can go to full while you
+trace and comes back to your level afterwards.
+
+
+### Pen masks
+
+A mask is a stencil in shades of grey: black ignores the pen, white leaves it alone, and grey either fades the
+pressure or needs a firmer press. Make one from any image, or start from 14 sample masks: rough paper, grain,
+corrugation, hatching, canvas weave, halftone dots, fades and shapes. Move and zoom it, invert it, and set its
+contrast and strength; the tablet picture shows it at the strength it will have. Switch masks from a corner
+tab on the tablet.
+
+![Rough paper, corrugation and star masks on the tablet](docs/screenshots/masks.png)
+
+![The sample masks](docs/screenshots/samples.png)
+
+
+### Hold to snap
+
+Draw a line, circle, ellipse, triangle, rectangle or polygon, hold the pen still, and it becomes a clean shape,
+as in the tablet's own notebooks.
+
+
+### Calibrate and pen feel
+
+Calibrate with 9, 4 or 0 targets, pick a display, and drag out the part of the tablet you want to use. The
+pressure curve, light-touch threshold, tilt and edge lift live on the same page.
+
+![Calibrate: the tablet on your display and the pressure curve](docs/screenshots/calibrate.png)
+
+
+### Wi-Fi
+
+Plugged in once, the app can switch on reMarkable's own SSH over Wi-Fi and then find the tablet on your
+network with the cable out (Settings). It only logs in to the tablet whose key it saw on the cable. Use it on
+networks you trust; the cable stays the faster link.
 
 *(The desktop screenshots show the app with sample data.)*
+
 
 ## Requirements
 
 - A **reMarkable Paper Pro** with **developer mode** turned on. Tested on software 3.29.
 - Or, in beta and not yet tested on real hardware, a **reMarkable 2** or **reMarkable 1** on software 3.28 or
-  newer (the tablet screen is built against that release's Qt). These need no developer mode: their cable
-  connection takes SSH as they come. They have no front light, so the light-pad option does nothing there.
+  newer. These need no developer mode. They have no front light, so the light controls do nothing there.
 - **Windows 10 (1809 or newer) or Windows 11**, and the USB-C cable.
 - The installer and portable version bring everything else with them. Running from source needs Python 3.10+.
+
 
 ## Install
 
 Download from [Releases](../../releases):
 
-- **`ReDrawable-Setup-x.y.z.exe`** installs for your user account only, with no admin rights. You get a
-  Start-menu entry, and an uninstaller removes it cleanly.
+- **`ReDrawable-Setup-x.y.z.exe`** installs for your user account only, with no admin rights. It upgrades an
+  existing Paper Tablet install in place, and your settings move over by themselves.
 - **`ReDrawable-Portable-x.y.z.zip`** needs no installation. Unzip it anywhere, even onto a USB stick, and run
-  *ReDrawable*. Settings, calibration and the app's key stay in the `data` folder next to it, so nothing
-  is left on the PC.
+  *ReDrawable*. Settings, calibration and the app's key stay in the `data` folder next to it.
 
 The builds aren't code-signed yet, so Windows SmartScreen may warn the first time you run them
 (*More info → Run anyway*).
 
 **From source:** clone this repo and double-click `ReDrawable.bat`. It installs `paramiko` and `pywebview`
 once, then starts the app.
+
 
 ## First run
 
@@ -99,6 +135,7 @@ The setup guide opens by itself and walks you through it:
 
 After that, plugging in is all it takes.
 
+
 ## Using it
 
 **In your drawing app.**
@@ -107,38 +144,31 @@ After that, plugging in is all it takes.
 - Krita, Clip Studio, Illustrator and Affinity: choose their *Windows Ink* or *Windows Pointer* tablet mode.
 - Apps that only speak **WinTab** see a pen without pressure.
 
-**Shortcut panel.** It sits on the left or right edge of the tablet, about 34 mm wide, with 8 rows of 2 buttons.
-- **Editing.** On the *Panel & gestures* page, click a button to set its title and what it does, and drag one
-  onto another to swap them. To set keys, press *Record* and hit the keys, or type something like `ctrl+shift+s`.
-- **Button types:**
-  - *Shortcut* taps its keys.
-  - *Hold key* holds them while your finger stays on the button. A quick tap (or the pen) locks it until you tap again.
-  - *Pen on/off* and *Shapes on/off* switch those features.
-  - *Clear ink* wipes the tablet's trails.
-  - *Empty* leaves a gap.
-- **Defaults:** Undo, Redo, brush size −/+, Brush, Eraser, Hand (hold Space), Pick (hold Alt), Ctrl, Shift,
-  Zoom −/+, Fit, Shapes, Pen, Save.
-- **Folding.** The triangle in the panel's top corner folds the panel away, and the drawing area grows to
-  the full width.
+**Shortcut panels.** On *Panel & gestures*, click a button to set its title and what it does, and drag one onto
+another to swap them. To set keys, press *Record* and hit the keys, or type something like `ctrl+shift+s`.
+Button types: *Shortcut* taps its keys; *Hold key* holds them while your finger stays on the button (a quick tap
+locks it); *Pen on/off*, *Shapes on/off*, *Move image*, *Light full / back*, *Invert mask* and *Clear ink*
+do what they say; *Empty* leaves a gap.
 
 **Gestures** (switch them off on the same page):
 
 | Gesture | Does |
 |---|---|
-| 3 fingers, swipe left / right | Undo / redo. One step per ~11 mm of swipe, live, and dragging back takes steps back (Short / Medium / Long) |
+| 3 fingers, swipe left / right | Undo / redo, one step per stretch of the swipe, live; dragging back takes steps back |
 | 2 fingers, drag | Pan (holds Space and drags, like the hand tool) |
 | 2 fingers, pinch | Zoom in / out (Ctrl+= / Ctrl+-) |
-| 5 fingers, twist | Rotate the canvas (holds R and drags round the window centre; Shift+Space for Krita / Clip Studio) |
+| 5 fingers, twist | Rotate the canvas (holds R and drags; Shift+Space for Krita / Clip Studio) |
 | 1 finger, triple tap | New layer (Ctrl+Shift+Alt+N), changeable |
-| 5 fingers, double tap | Reset the canvas rotation (holds R and presses Esc; Krita: `5`), changeable |
-| 5 fingers, swipe down | Clear the tablet ink and cleanly refresh the whole screen (clears e-ink leftovers) |
+| 5 fingers, double tap | Reset the canvas rotation (holds R and presses Esc; Krita: 5), changeable |
+| 5 fingers, swipe down | Clear the tablet ink and cleanly refresh the whole screen |
 | 1-finger double tap, 2-finger tap and double tap, 3-finger tap | Off until you assign keys |
 
-The default shortcuts follow Photoshop. Krita and Clip Studio use most of the same keys; change any that differ.
+The presets follow Photoshop's default shortcuts. Krita and Clip Studio use most of the same keys; change any that differ.
 
 **Hold to snap.** Draw a shape and keep the pen still for 0.6 s. The app lifts the pen, presses Ctrl+Z to
 remove your stroke, and draws the clean shape with your stroke's own pressure. Because it relies on Ctrl+Z
-removing exactly one stroke, it only works in the drawing programs listed on *Pen feel*.
+removing exactly one stroke, it only works in the drawing programs listed under *Only in*.
+
 
 ## Safety: what it does to your tablet
 
@@ -149,24 +179,28 @@ removing exactly one stroke, it only works in the drawing programs listed on *Pe
   ever stays blank, hold the power button to restart it.
 - Your notebooks are never read or changed.
 - Login uses an SSH key the app makes for itself. The tablet password is used once to install that key, and
-  is never saved. The connection stays on the USB link (10.11.99.1).
+  is never saved.
 - Developer mode itself is reMarkable's feature, and turning it on resets the tablet. Read reMarkable's own
   guide first.
+
 
 ## Building
 
 - **Run the tests:** `cd pc && python -m unittest test_shapes test_rmtablet test_panel`.
-- **The tablet programs** are built with reMarkable's official Paper Pro SDK
+- **The tablet programs** are built with reMarkable's official SDK
   (`SDK=/path/to/sdk tablet/companion/build.sh`). Prebuilt binaries are in the repo.
 - **The installer and portable zip** are built with the scripts in `installer/` (embedded Python + Inno Setup).
+  `installer/make_sample_masks.py` regenerates the sample masks.
 - **Portable mode** works with any copy: put an empty file named `portable` (or `portable.txt`) next to
   `ReDrawable.bat` or the exe, and everything is kept in `data\` beside it.
 
 [docs/TECHNICAL.md](docs/TECHNICAL.md) covers how it works: measured hardware ranges, the tablet-screen app,
 and the command-line tool.
 
+
 ## Licence
 
-MIT, see [LICENSE](LICENSE). The bundled IBM Plex fonts are under the SIL Open Font License
-(`pc/web/fonts/OFL-IBM-Plex.txt`). The tablet-screen app links against the Qt libraries already on the tablet.
-"reMarkable" and "Paper Pro" are trademarks of reMarkable AS, used here only to say which device this works with.
+MIT, see [LICENSE](LICENSE). The bundled fonts (IBM Plex, EB Garamond, Libre Franklin, Work Sans) are under the SIL Open Font License
+(`pc/web/fonts/`). The gesture duck is the "small duck" icon from SVG Repo. The tablet-screen app links against
+the Qt libraries already on the tablet. "reMarkable" and "Paper Pro" are trademarks of reMarkable AS, used here
+only to say which device this works with.
