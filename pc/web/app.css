@@ -363,6 +363,17 @@ ol.steps li .sub { color:var(--dim2); font-size:12px; margin-top:2px; }
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .combo-list div:hover, .combo-list div.hl { background:var(--s4); }
 .combo-list div.on { color:var(--accent); }
+/* the sample masks: a grid of thumbnails under the Samples button */
+.samples-wrap { position:relative; }
+.samples { position:absolute; left:0; top:calc(100% + 4px); z-index:30; width:360px; display:grid; grid-template-columns:repeat(3, 1fr);
+  gap:6px; padding:8px; background:var(--s2); border:1px solid var(--border2); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+.samples[hidden] { display:none; }
+.samples .samples-all { grid-column:1 / -1; flex-direction:row; justify-content:center; font-size:12px; padding:6px; border-color:var(--border2); }
+.samples button { display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px; border:1px solid transparent;
+  border-radius:var(--radius); background:none; cursor:pointer; color:var(--text); font:inherit; font-size:11px; min-width:0; }
+.samples button:hover { background:var(--s4); border-color:var(--border2); }
+.samples img { width:100%; aspect-ratio:1; display:block; border:1px solid var(--border); background:#fff; }
+.samples span { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pm-prof { position:absolute; border:solid #000; background:#fff; box-sizing:border-box; display:flex;
   align-items:center; justify-content:center; font-weight:700; color:#000; }
 .pm-prof span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
@@ -425,5 +436,5 @@ ol.steps li .sub { color:var(--dim2); font-size:12px; margin-top:2px; }
 .pm-ov > * { pointer-events:auto; }
 
 /* Panel & gestures: the profile field reads as a name, not a disabled box; the sub-page switch */
-#profCombo .input[readonly] { color:var(--text); }
+#profCombo .input[readonly], #maskCombo .input[readonly] { color:var(--text); }
 .seg.subnav { align-self:flex-start; }

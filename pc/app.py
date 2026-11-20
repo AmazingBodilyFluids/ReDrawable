@@ -6,6 +6,7 @@ The window is an HTML interface in web/; everything it does goes through Api bel
 headless Engine in core.py. A small splash window shows while the engine starts.
 Needs: Python 3.10+, `pip install -r requirements.txt` (paramiko, pywebview).
 """
+import base64
 import json
 import os
 import sys
@@ -42,7 +43,6 @@ if sys.platform == "win32":
 BG = "#060e17"
 # Window background per theme (web/themes.css), shown before the page has painted
 THEME_BG = {"default": BG, "graphite": "#101215", "ledger": "#f4f1e8", "intaglio": "#0e1a15"}
-SPLASHES = ("slab", "snap")  # web/splash.html, Settings > Splash
 SPLASH_MAX_S = 7.0  # give up waiting for the splash animation after this
 MAIN_TITLE = "ReDrawable"
 SPLASH_TITLE = "ReDrawable starting"
@@ -65,8 +65,8 @@ def saved_theme():
 def clear_backdrop(title):
     """Make a transparent pywebview window truly see-through on Windows 11: pywebview's transparent=True
     is not enough on WebView2. The system backdrop goes off (pywebview sets Mica on dark windows) and so
-    does the accent policy, or Windows paints a frosted blur behind the page. Same recipe as the Kallisti
-    Case Manager splash. Call while the window is still hidden."""
+    does the accent policy, or Windows paints a frosted blur behind the page. Same recipe as the K
+    splash. Call while the window is still hidden."""
     import ctypes
     u, dwm = ctypes.windll.user32, ctypes.windll.dwmapi
     hwnd = u.FindWindowW(None, title)
@@ -183,6 +183,18 @@ class Api:
 
     def mask_source(self):
         return self._engine.mask_source()
+
+    # the sample masks in web/masks: as data URLs, because the page (a file:// page) can't read
+    # its own files into a canvas
+    def sample_masks(self):
+        with open(os.path.join(HERE, "web", "masks", "index.json"), encoding="utf-8") as f:
+            return json.load(f)
+
+    def sample_mask(self, sid):
+        if not any(m["id"] == sid for m in self.sample_masks()):
+            return None
+        with open(os.path.join(HERE, "web", "masks", sid + ".png"), "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
 
     # the Tablet screen page's picture: the images the tablet is sent
     def trace_image(self):
@@ -339,8 +351,7 @@ def main():
     # and the exact size and place of the main window, so the object can grow into it; elsewhere, where
     # see-through windows depend on the desktop, it stays the small themed window.
     clear = sys.platform == "win32"
-    start_js = "start(%s)" % json.dumps({"variant": saved_setting("splash", SPLASHES, "slab"), "theme": theme,
-                                         "opaque": not clear})
+    start_js = "start(%s)" % json.dumps({"theme": theme, "opaque": not clear})
     if clear:
         splash = webview.create_window(SPLASH_TITLE, os.path.join(HERE, "web", "splash.html"),
                                        width=1240, height=820, frameless=True, easy_drag=False,
@@ -372,8 +383,8 @@ def main():
     window = webview.create_window(MAIN_TITLE, os.path.join(HERE, "web", "index.html"), js_api=api,
                                    width=1240, height=820, min_size=(900, 600),
                                    frameless=True, easy_drag=False, hidden=True, background_color=THEME_BG[theme])
-    splash.events.shown += lambda: place_window(SPLASH_TITLE, 560, 340)
-    splash.events.loaded += lambda: splash.evaluate_js(f"document.documentElement.dataset.theme = {json.dumps(theme)}")
+    if not clear:
+        splash.events.shown += lambda: place_window(SPLASH_TITLE, 560, 340)
     api._window = window
     t0 = time.time()
 
@@ -445,6 +456,11 @@ def main():
         if api._to_tray():
             return False  # cancels the close
         api._closing = True
+        # A process that hangs on its way out keeps the single-instance lock, and every later start
+        # then only "brings it to the front" (nothing shows). Whatever hangs, end it after 8 s.
+        guard = threading.Timer(8.0, lambda: os._exit(0))
+        guard.daemon = True  # a normal exit doesn't wait for it
+        guard.start()
         tray, api._tray = api._tray, None
         if api._engine:
             api._engine.shutdown()

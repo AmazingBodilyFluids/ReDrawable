@@ -131,7 +131,6 @@ function render() {
   }
 
   if (Date.now() > themeHold) applyTheme(S.cfg.theme || "intaglio");
-  if (Date.now() > splashHold) applySplash(S.cfg.splash || "slab");
 
   // bound settings
   for (const el of $$("[data-key]")) {
@@ -250,7 +249,7 @@ document.addEventListener("input", e => {
     if (el.dataset.key === "paper_mm") $("#paperV").textContent = v.toFixed(1).replace(/\.0$/, "") + " mm";
     if (el.dataset.key === "trace_opacity") $("#traceV").textContent = Math.round(v * 100) + "%";
     if (el.dataset.key === "mask_contrast") { $("#maskConV").textContent = "×" + v; Scr.draw(); }
-    if (el.dataset.key === "mask_strength") $("#maskStrV").textContent = Math.round(v * 100) + "%";
+    if (el.dataset.key === "mask_strength") { $("#maskStrV").textContent = Math.round(v * 100) + "%"; Scr.draw(); }
     if (el.dataset.key === "gamma") $("#gammaV").textContent = v.toFixed(2);
     if (el.dataset.key === "threshold") $("#threshV").textContent = Math.round(v * 100) + "%";
     drawCurve();
@@ -331,25 +330,6 @@ for (const b of $$("#themes button")) b.onclick = () => {
   themeHold = Date.now() + 1500;
   applyTheme(b.dataset.t);
   api().set("theme", b.dataset.t);
-};
-
-// ------------------------------------------------------------------ opening splash (Settings; web/splash.html plays it at the next start)
-
-const SPLASHES = [["slab", "Slab"], ["snap", "Snap"]];
-let splashHold = 0;  // as themeHold
-
-function applySplash(v) {
-  for (const b of $$("#splashes button")) {
-    b.classList.toggle("on", b.dataset.v === v);
-    b.setAttribute("aria-checked", b.dataset.v === v);
-  }
-  $("#splashName").textContent = (SPLASHES.find(x => x[0] === v) || SPLASHES[0])[1];
-}
-$("#splashes").innerHTML = SPLASHES.map(([k, name]) => `<button role="radio" data-v="${k}">${name}</button>`).join("");
-for (const b of $$("#splashes button")) b.onclick = () => {
-  splashHold = Date.now() + 1500;
-  applySplash(b.dataset.v);
-  api().set("splash", b.dataset.v);
 };
 
 // ------------------------------------------------------------------ window edges and maximise
@@ -738,18 +718,20 @@ function maskRect(src, W, H) {
 let maskOverlays = {};  // by opacity, {key, canvas}: the shaded picture, redrawn only when something changes
 // Black whose alpha is the level after contrast and invert (penmask.contrast_table), times a:
 // what the tablet lays over its screen at a = 0.4.
+// a = how dark a spot the pen can't reach at all is drawn. Intensity scales the shades as it scales
+// the hold on the pen (core.mask_pressure: min(1, intensity x shade)), so 0% shows nothing.
 function maskLayer(a) {
   const src = maskSource();
   if (!src) return null;
-  const k = S.cfg.mask_contrast || 1, inv = !!S.cfg.mask_invert;
-  const key = [src.ver, src.s, src.ox, src.oy, k, inv, src.el.width].join();
+  const k = S.cfg.mask_contrast || 1, inv = !!S.cfg.mask_invert, str = S.cfg.mask_strength ?? 1;
+  const key = [src.ver, src.s, src.ox, src.oy, k, inv, str, src.el.width].join();
   let o = maskOverlays[a];
   if (!o || o.key !== key) {
     const lv = src.grid && src.s === 1 && !src.ox && !src.oy ? src.lv : maskRender(src);
     const c = document.createElement("canvas"); c.width = c.height = MASK_N;
     const g = c.getContext("2d"), d = g.createImageData(MASK_N, MASK_N);
     for (let i = 0; i < lv.length; i++)
-      d.data[4 * i + 3] = Math.round(a * Math.max(0, Math.min(255, Math.floor(128 + ((inv ? 255 - lv[i] : lv[i]) - 127.5) * k))));
+      d.data[4 * i + 3] = Math.round(a * Math.min(255, str * Math.max(0, Math.min(255, Math.floor(128 + ((inv ? 255 - lv[i] : lv[i]) - 127.5) * k)))));
     g.putImageData(d, 0, 0);
     o = maskOverlays[a] = { key, canvas: c };
   }
@@ -1415,6 +1397,14 @@ const Panel = {
       await this.flush();
       add(S.cfg.panel_profiles[S.cfg.panel_profile].name + " copy", S.cfg.panel_buttons, S.cfg.panel_buttons_right);
     };
+    $("#profPresets").onclick = async () => {
+      await this.flush();
+      const p = profs(), have = new Set(p.map(x => x.name.toLowerCase()));
+      const todo = Object.entries(S.presets || {}).filter(([n]) => !have.has(n.toLowerCase()));
+      if (!todo.length) return toast("All the built-in sets are already in your profiles.");
+      for (const [name, b] of todo) p.push({ name, buttons: copy(b.left), buttons_right: copy(b.right), touch: "shortcuts" });
+      this.setProfiles(p, S.cfg.panel_profile).then(() => toast(`Added ${todo.map(([n]) => n).join(", ")}.`));
+    };
     let armed = 0;
     $("#profDel").onclick = () => {  // two clicks, so a stray one can't lose a layout
       const b = $("#profDel");
@@ -1771,7 +1761,7 @@ const Scr = {
     }
     this.paper(ctx, L.paperW, L.VH, hair);
     if (c.mask_on && c.mask_active) {
-      const m = maskLayer(0.4);
+      const m = maskLayer(0.6);
       if (m) { ctx.imageSmoothingEnabled = true; ctx.drawImage(m, -L.paperX, 0, L.VW, L.VH); }
       const src = maskSource();
       if (src && this.mode() === "mask") {  // where the mask's image reaches, so it can be found and moved
@@ -2186,11 +2176,10 @@ function renderMasks() {
       `<div role="option" data-id="${esc(m.id)}" class="${m.id === cur ? "on" : ""}" aria-selected="${m.id === cur}">${esc(m.name)}</div>`).join("");
   }
   const m = ms.find(x => x.id === cur), name = $("#maskName");
-  if (document.activeElement !== name) name.value = m ? m.name : "";
-  name.readOnly = !m;  // None: nothing to rename, a click opens the list instead
+  if (document.activeElement !== name) { name.value = m ? m.name : ""; name.readOnly = true; }
   $("#maskDel").disabled = !m;
 }
-// The mask field: the name is the active mask's, renamed in place; the chevron opens the list.
+// The mask field, as the profile field: a click opens the list, a double-click renames the mask in place.
 const MaskCombo = {
   open(on = $("#maskList").hidden) {
     $("#maskList").hidden = !on;
@@ -2207,7 +2196,12 @@ const MaskCombo = {
 };
 $("#maskChev").onclick = e => { e.stopPropagation(); MaskCombo.open(); };
 $("#maskList").onclick = e => { const d = e.target.closest("[data-id]"); if (d) MaskCombo.pick(d.dataset.id); };
-$("#maskName").onclick = e => { if (e.target.readOnly) { e.stopPropagation(); MaskCombo.open(); } else MaskCombo.open(false); };
+$("#maskName").onclick = e => { if (e.target.readOnly) { e.stopPropagation(); MaskCombo.open(); } };
+$("#maskName").ondblclick = e => {
+  if (!S.cfg.mask_active) return;  // None: nothing to rename
+  MaskCombo.open(false); e.target.readOnly = false; e.target.focus(); e.target.select();
+};
+$("#maskName").onblur = e => { e.target.readOnly = true; };
 $("#maskName").onkeydown = e => {
   if (e.key === "Enter") e.target.blur();
   else if (e.key === "Escape") { const m = (S.cfg.masks || []).find(x => x.id === S.cfg.mask_active); e.target.value = m ? m.name : ""; e.target.blur(); }
@@ -2260,24 +2254,69 @@ function maskFromImage(input) {
   const file = input.files && input.files[0];
   input.value = "";
   if (!file) return;
-  const img = new Image(), url = URL.createObjectURL(file);
+  const url = URL.createObjectURL(file);
+  maskFromUrl(url, file.name.replace(/\.[^.]*$/, ""), "Mask added from " + file.name, () => URL.revokeObjectURL(url));
+}
+function maskFromUrl(url, name, done, after) {
+  return new Promise(resolve => {
+  const img = new Image();
   img.onload = async () => {
-    URL.revokeObjectURL(url);
+    if (after) after();
     // the image itself is kept with the mask (as a PNG, at most 2048 px), so it can be moved again later
     const k = Math.min(1, 2048 / Math.max(img.width, img.height)), c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
     c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-    const id = await api().new_mask(file.name.replace(/\.[^.]*$/, "").slice(0, 24) || null);  // each image is a mask of its own
+    const id = await api().new_mask(name.slice(0, 24) || null);  // each image is a mask of its own
     await api().set_mask_source(c.toDataURL("image/png"));
     S.cfg.mask_active = id;
     maskSrc = { el: c, grid: false, s: 1, ox: 0, oy: 0, ver: null, id };
     await maskCommit(maskSrc);
-    toast("Mask added from " + file.name + ". Drag it on the tablet picture to move it; the wheel zooms it.");
-    Scr.setDrag("mask");
+    if (done) { toast(done + ". Drag it on the tablet picture to move it; the wheel zooms it."); Scr.setDrag("mask"); }
+    resolve(id);
   };
-  img.onerror = () => { URL.revokeObjectURL(url); toast("That file isn't an image the app can read."); };
+  img.onerror = () => { if (after) after(); toast("That file isn't an image the app can read."); resolve(null); };
   img.src = url;
+  });
 }
+
+// Sample masks that come with the app (web/masks, made by installer/make_sample_masks.py): a grid
+// under the Samples button; a click adds that one to the library as if it were an image of yours.
+// The pictures come from the PC side as data URLs: a canvas fed from a file:// image can't be read.
+(() => {
+  const btn = $("#maskSamples"), grid = $("#sampleGrid");
+  const close = () => { grid.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+  btn.onclick = async () => {
+    if (!grid.hidden) return close();
+    if (!grid.children.length) {
+      let list = null;
+      try { list = await api().sample_masks(); } catch (e) { list = null; }
+      if (!list) return toast("The sample masks are missing.");
+      grid.innerHTML = `<button type="button" class="btn ghost samples-all" data-tip="Adds each sample that isn't in your masks yet">Add all</button>` +
+        list.map(m => `<button type="button" data-id="${esc(m.id)}" data-name="${esc(m.name)}" title="${esc(m.name)}">
+        <img src="masks/${esc(m.id)}.png" alt=""><span>${esc(m.name)}</span></button>`).join("");
+      $(".samples-all", grid).onclick = async () => {
+        close();
+        const have = new Set((S.cfg.masks || []).map(m => m.name.toLowerCase())), prev = S.cfg.mask_active || "";
+        const todo = list.filter(m => !have.has(m.name.toLowerCase()));
+        if (!todo.length) return toast("All the samples are already in your masks.");
+        for (const m of todo) {
+          const url = await api().sample_mask(m.id);
+          if (url) await maskFromUrl(url, m.name, "");
+        }
+        await api().pick_mask(prev); maskSrc = null; refresh();  // back to the mask in use before
+        toast(`Added ${todo.length} sample mask${todo.length > 1 ? "s" : ""}.`);
+      };
+      for (const b of $$("button[data-id]", grid)) b.onclick = async () => {
+        close();
+        const url = await api().sample_mask(b.dataset.id);
+        if (url) maskFromUrl(url, b.dataset.name, `Added the ${b.dataset.name} mask`);
+      };
+    }
+    grid.hidden = false; btn.setAttribute("aria-expanded", "true");
+  };
+  document.addEventListener("mousedown", e => { if (!grid.hidden && !e.target.closest(".samples-wrap")) close(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+})();
 
 // Trail: 0.25-5 s, and one step past 5 s is "until cleared" (stored as 0, which the tablet keeps forever)
 const TRAIL_MAX = 5250;

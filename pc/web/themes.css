@@ -1,6 +1,6 @@
 /* Colour themes, chosen in the title bar (html[data-theme], saved as the "theme" setting).
-   "default" is app.css's own :root palette. Graphite, Ledger and Intaglio come from Kallisti Case
-   Manager (ui/app.css), mapped onto ReDrawable's variables; --s4 and --border2 are added here.
+   "default" is app.css's own :root palette. Graphite, Ledger and Intaglio come from K
+   mapped onto ReDrawable's variables; --s4 and --border2 are added here.
    Load after app.css. The tablet pictures (body, paper screen) keep their own colours. */
 [data-theme="graphite"] {
   --ink:#f2f0ea;
@@ -39,7 +39,7 @@
   color-scheme:dark;
 }
 
-/* each theme's one material signature, as in Kallisti */
+/* each theme's one material signature, as in K */
 [data-theme="ledger"] .content { background:repeating-linear-gradient(var(--bg) 0 31px, rgba(29,36,32,0.07) 31px 32px); }
 [data-theme="ledger"] .titlebar { background:#1d2420; color:#f4f1e8; --bg:#161c19; --ink:#f4f1e8; --text:#f4f1e8; --dim:rgba(244,241,232,0.80);
   --dim2:rgba(244,241,232,0.66); --s1:#232c27; --s2:#2b3530; --s3:#34403a; --border:rgba(244,241,232,0.14);

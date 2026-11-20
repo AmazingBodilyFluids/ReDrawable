@@ -1,0 +1,58 @@
+[
+ {
+  "id": "rough-paper",
+  "name": "Rough paper"
+ },
+ {
+  "id": "coarse-grain",
+  "name": "Coarse grain"
+ },
+ {
+  "id": "corrugation",
+  "name": "Corrugation"
+ },
+ {
+  "id": "diagonal-hatch",
+  "name": "Diagonal hatch"
+ },
+ {
+  "id": "canvas-weave",
+  "name": "Canvas weave"
+ },
+ {
+  "id": "halftone",
+  "name": "Halftone dots"
+ },
+ {
+  "id": "checker",
+  "name": "Checkerboard"
+ },
+ {
+  "id": "fade",
+  "name": "Fade, left to right"
+ },
+ {
+  "id": "vignette",
+  "name": "Soft edges"
+ },
+ {
+  "id": "circle",
+  "name": "Circle"
+ },
+ {
+  "id": "square",
+  "name": "Rounded square"
+ },
+ {
+  "id": "triangle",
+  "name": "Triangle"
+ },
+ {
+  "id": "star",
+  "name": "Star"
+ },
+ {
+  "id": "heart",
+  "name": "Heart"
+ }
+]

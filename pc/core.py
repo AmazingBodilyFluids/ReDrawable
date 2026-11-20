@@ -49,7 +49,6 @@ DEFAULTS = {
     "onboarded": False,
     # window: colour theme (web/themes.css), and whether closing the window keeps the app in the tray
     "theme": "intaglio", "close_to_tray": True,
-    "splash": "slab",  # the opening animation (web/splash.html): slab | snap
     # hold-to-snap shapes
     "snap": True, "snap_hold_ms": 600, "snap_apps": ", ".join(shapes.DRAWING_APPS),
     # tablet-screen side panels with shortcut buttons: left | right | both | off; each folds on its own

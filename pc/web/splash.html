@@ -5,16 +5,18 @@
 <title>ReDrawable</title>
 <link rel="stylesheet" href="fonts.css">
 <style>
-  /* The opening splash: one object on the bare desktop. On Windows the window is frameless, per-pixel
-     transparent and the exact size and place of the main window (app.py); the object lands, shows the
-     name, then grows into the window's field, the main window is shown underneath and the field fades.
-     Elsewhere (body.opaque) it is the small themed window it used to be, and simply fades.
-     Two objects, chosen in Settings > Splash: "slab" (the tablet) and "snap" (a hand-drawn outline that
-     snaps true). The app calls start(), handoff() and reveal(), and reads splashDone / splashCovered. */
+  /* The opening splash: one object on the bare desktop, a hand-drawn outline that is held and snaps true,
+     like hold-to-snap, then shows the name. On Windows the window is frameless, per-pixel transparent and
+     the exact size and place of the main window (app.py); the object lands, then grows into the window's
+     field, the main window is shown underneath and the field fades. Elsewhere (body.opaque) it is the
+     small window it used to be, and simply fades.
+     The object's own colours are fixed (--sp-*), the same under every app theme; only the field it grows
+     into at the handoff takes the app theme (--bg, --win-border), because it has to match the window
+     that appears under it. The app calls start(), handoff() and reveal(), and reads splashDone / splashCovered. */
   /* EB Garamond, SIL Open Font License 1.1 (fonts/OFL-EB-Garamond.txt): the name, set like the tablet maker's */
   @font-face { font-family:"EB Garamond"; font-weight:400 800; src:url("fonts/EBGaramond-Latin.woff2") format("woff2"); }
-  :root { --bg:#060e17; --s1:#0a1520; --accent:#C4A882; --accent2:#4A9EE0; --text:#e8e2d6;
-          --win-border:rgba(196,168,130,0.45); }
+  :root { --bg:#060e17; --win-border:rgba(196,168,130,0.45);
+          --sp-line:#cfb57a; --sp-fill:#13231c; --sp-pen:#7fb8d6; --sp-text:#eef0e6; }
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height:100%; background:transparent; overflow:hidden; user-select:none; cursor:default; }
   body { transition:opacity .45s ease; }
@@ -24,8 +26,8 @@
   .name { font-family:"EB Garamond",Georgia,"Times New Roman",serif; font-weight:500; text-anchor:middle; letter-spacing:.005em; }
   .sub { font-family:"IBM Plex Mono",Consolas,monospace; font-weight:400; text-anchor:middle; letter-spacing:.2em; }
   .field { fill:var(--bg); stroke:var(--win-border); stroke-width:1.5; vector-effect:non-scaling-stroke; }
-  .dot circle:first-child { fill:var(--accent2); }
-  .dot circle:last-child { fill:none; stroke:var(--accent2); stroke-opacity:.4; stroke-width:1.5; }
+  .dot circle:first-child { fill:var(--sp-pen); }
+  .dot circle:last-child { fill:none; stroke:var(--sp-pen); stroke-opacity:.4; stroke-width:1.5; }
 </style>
 <link rel="stylesheet" href="themes.css">
 </head>
@@ -36,7 +38,7 @@
   <g id="obj"></g>
 </svg>
 <script>
-const PAPER = "#ece9df", INK = "#16191a";
+const FILL = .29;      // how solid the object's ground is: the desktop shows through the rest
 const HANDOFF = 0.6;  // s, the object growing into the window
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ph = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
@@ -53,48 +55,18 @@ let W = 0, H = 0, K = 1, opaque = false, update = null, rest = 0, t0 = 0, hAt = 
 window.splashDone = false;      // the object has landed and shows the name
 window.splashCovered = false;   // it has grown over the whole window: the main window can be shown underneath
 
-// Each builder draws into #obj (centred on the window, 1 unit = K px) and returns update(t, h):
+// Draws into #obj (centred on the window, 1 unit = K px) and returns update(t, h):
 // t = seconds since start, h = 0..1 through the handoff. ww/wh: the window in the object's units.
-const BUILD = {
-  slab(g, ww, wh) {
-    g.innerHTML = `
-      <g class="lift"><g class="tab">
-        <rect x="-165" y="-118" width="330" height="236" rx="13" fill="#232427" stroke="#45474c" stroke-width="1.5"/>
-        <rect x="-151" y="-104" width="302" height="208" rx="3" fill="${PAPER}"/>
-        <path class="ink" d="M-96 -18 C -60 -78, -28 -78, -8 -38 S 42 12, 66 -50 S 108 -88, 120 -58" fill="none" stroke="${INK}"
-              stroke-width="3.2" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>
-        ${DOT}
-        <text class="name" y="48" font-size="46" fill="${INK}" opacity="0">ReDrawable</text>
-        <text class="sub" x="1" y="74" font-size="10" fill="${INK}" opacity="0">for reMarkable tablets</text>
-      </g></g>
-      <rect class="field" opacity="0"/>`;
-    const lift = g.querySelector(".lift"), tab = g.querySelector(".tab"), ink = g.querySelector(".ink"), dot = g.querySelector(".dot"),
-          name = g.querySelector(".name"), sub = g.querySelector(".sub"), field = g.querySelector(".field");
-    rest = 2.3;
-    return (t, h) => {
-      const a = back(ph(t, 0, .85)), d = io(ph(t, .9, 1.6)), e = io(h);
-      const bw = lerp(330, ww, e), bh = lerp(236, wh, e);
-      set(lift, { transform: `translate(0 ${lerp(wh / 2 + 140, 0, out(ph(t, 0, .85)))})`, opacity: ph(t, 0, .12),
-                  filter: h > 0 || opaque ? "none" : "url(#shadow)" });
-      set(tab, { transform: `rotate(${lerp(-16, 0, a)}) scale(${lerp(.72, 1, a) * bw / 330} ${lerp(.22, 1, a) * bh / 236})` });
-      ink.setAttribute("stroke-dashoffset", 1 - d);
-      const p = at(ink, d); set(dot, { transform: `translate(${p[0]} ${p[1]})`, opacity: d > 0 && t < 1.72 ? 1 : 0 });
-      name.setAttribute("opacity", out(ph(t, 1.6, 2.0))); sub.setAttribute("opacity", .7 * out(ph(t, 1.85, 2.25)));
-      set(field, { x: -bw / 2, y: -bh / 2, width: bw, height: bh, rx: lerp(13, 0, e), opacity: ph(h, 0, .5) });
-    };
-  },
-
-  snap(g, ww, wh) {
+function build(g, ww, wh) {
     g.innerHTML = `
       <g class="lift">
-        <path class="shape" fill="var(--s1)" fill-opacity="0" stroke="var(--accent)" stroke-linecap="round" stroke-linejoin="round"/>
+        <path class="shape" fill="var(--sp-fill)" fill-opacity="0" stroke="var(--sp-line)" stroke-linecap="round" stroke-linejoin="round"/>
         <g class="in" opacity="0">
-          <rect x="-136" y="-86" width="272" height="172" rx="4" fill="none" stroke="var(--accent)" stroke-opacity=".28"/>
-          <text class="name" y="6" font-size="48" fill="var(--accent)">ReDrawable</text>
-          <text class="sub" x="1" y="34" font-size="10" fill="var(--text)" opacity=".7">for reMarkable tablets</text></g>
+          <text class="name" y="8" font-size="60" fill="var(--sp-line)"><tspan fill-opacity=".55">re</tspan>Drawable</text>
+          <text class="sub" x="1" y="39" font-size="10" fill="var(--sp-text)" opacity=".7">for reMarkable tablets</text></g>
       </g>
       <path class="field" opacity="0"/>
-      <circle class="ring" r="15" fill="none" stroke="var(--accent2)" stroke-width="3" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" opacity="0"/>
+      <circle class="ring" r="15" fill="none" stroke="var(--sp-pen)" stroke-width="3" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" opacity="0"/>
       ${DOT}<path class="tmp" fill="none"/>`;
     const N = 180, tmp = g.querySelector(".tmp");
     const rr = (x, y, w, h, r) => `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
@@ -118,17 +90,16 @@ const BUILD = {
       else if (t >= T_SNAP) { pts = mix(rough, clean, sn); close = ph(t, T_SNAP, T_SNAP + .28) > .5; }
       else pts = rough.slice(0, Math.max(2, Math.ceil(dr * N)));
       const d = dstr(pts, close);
-      set(shape, { d, "fill-opacity": fill, opacity: t < .15 ? 0 : 1,
+      set(shape, { d, "fill-opacity": fill * FILL, opacity: t < .15 ? 0 : 1,
                    "stroke-width": t < T_SNAP ? 3 : lerp(5.5, 2.5, ph(t, T_SNAP, T_SNAP + .4)) });
       lift.setAttribute("filter", h > 0 || opaque ? "none" : "url(#shadow)");
       set(field, { d, opacity: ph(h, 0, .5) });
       const head = t < T_SNAP ? rough[Math.max(0, Math.ceil(dr * N) - 1)] : clean[N - 1], lit = t > .1 && t < T_SNAP + .05;
       set(dot, { transform: `translate(${head[0]} ${head[1]})`, opacity: lit ? 1 : 0 });
       set(ring, { transform: `translate(${head[0]} ${head[1]}) rotate(-90)`, "stroke-dashoffset": 1 - hold, opacity: lit && hold > 0 ? 1 : 0 });
-      inn.setAttribute("opacity", fill);
+      inn.setAttribute("opacity", fill * (1 - ph(h, 0, .35)));
     };
-  },
-};
+}
 
 function frame(now) {
   let t = (now - t0) / 1000;
@@ -140,7 +111,7 @@ function frame(now) {
   if (t < rest || (hAt && h < 1)) raf = requestAnimationFrame(frame);
 }
 
-// start({variant, theme, opaque}): app.py calls it once the window is in place. Safe to call twice.
+// start({theme, opaque}): app.py calls it once the window is in place. Safe to call twice.
 function start(o) {
   if (t0) return;
   o = o || {};
@@ -152,7 +123,7 @@ function start(o) {
   set($("#anim"), { viewBox: `0 0 ${W} ${H}` });
   const g = $("#obj");
   g.setAttribute("transform", `translate(${W / 2} ${H / 2}) scale(${K})`);
-  update = (BUILD[o.variant] || BUILD.slab)(g, W / K, H / K);
+  update = build(g, W / K, H / K);
   t0 = performance.now();
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) t0 -= rest * 1000;  // straight to the landed object
   raf = requestAnimationFrame(frame);

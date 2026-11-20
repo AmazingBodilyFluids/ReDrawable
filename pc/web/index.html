@@ -79,24 +79,24 @@
             <div class="pane-title" data-tip="A stencil for the pen: black blocks it, white lets it through. None turns it off.">Pen mask</div>
             <div class="prof-row">
               <div class="combo" id="maskCombo">
-                <input class="input" id="maskName" maxlength="24" placeholder="None" data-tip="Click the name to rename this mask" autocomplete="off" spellcheck="false">
+                <input class="input" id="maskName" maxlength="24" placeholder="None" readonly data-tip="Click for your masks, double-click to rename" autocomplete="off" spellcheck="false">
                 <button class="combo-btn" id="maskChev" type="button" data-tip="Your masks" aria-haspopup="listbox" aria-expanded="false"></button>
                 <div class="combo-list" id="maskList" role="listbox" hidden></div>
               </div>
               <button class="btn" onclick="$('#maskFile').click()" data-tip="A mask from an image: black blocks the pen.">Add mask</button><input type="file" id="maskFile" accept="image/*" hidden onchange="maskFromImage(this)">
+              <div class="samples-wrap"><button class="btn ghost" id="maskSamples" type="button" aria-haspopup="true" aria-expanded="false" data-tip="Masks that come with ReDrawable: paper textures, patterns and shapes">Samples</button>
+                <div class="samples" id="sampleGrid" hidden></div></div>
               <button class="btn ghost" id="maskDel">Delete</button>
             </div>
             <p class="hint mts" id="maskInfo"></p>
             <div class="opt"><div class="tx" data-tip="A corner tab on the tablet for masks and paper."><div class="t1">Mask strip</div></div>
               <div class="seg maskSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
-            <div class="opt"><div class="tx" data-tip="Drag on the preview to move; wheel or pinch to scale. Reset puts it back to full size."><div class="t1">Place</div></div>
-              <div class="row"><button class="btn ghost" id="maskMove" onclick="Scr.toggleMove('mask')">Move</button><button class="btn ghost" id="maskCentre" onclick="maskCentre()">Reset</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Move: drag on the preview, wheel or pinch to scale. Reset: back to full size. Invert swaps black and white. Clear empties the mask."><div class="t1">Place</div></div>
+              <div class="row"><button class="btn ghost" id="maskMove" onclick="Scr.toggleMove('mask')">Move</button><button class="btn ghost" id="maskCentre" onclick="maskCentre()">Reset</button><button class="btn ghost" id="maskInv" onclick="maskInvert()">Invert</button><button class="btn ghost" onclick="maskOp('clear')">Clear</button></div></div>
             <div class="opt"><div class="tx" id="maskModeTx"><div class="t1">Grey sets</div></div>
               <div class="seg" data-key="mask_mode"><button data-v="fade">Opacity</button><button data-v="gate">Pressure</button></div></div>
             <div class="opt" style="display:block"><div class="range-row"><span data-tip="How strongly grey holds the pen back">Intensity</span><input type="range" min="0" max="2" step="0.05" data-key="mask_strength" data-type="float"><span class="v" id="maskStrV"></span></div></div>
             <div class="opt" style="display:block"><div class="range-row"><span data-tip="Left: softer greys. Right: towards a hard black and white cut-out.">Contrast</span><input type="range" min="0.25" max="6" step="0.25" data-key="mask_contrast" data-type="float"><span class="v" id="maskConV"></span></div></div>
-            <div class="opt"><div class="tx" data-tip="Invert swaps black and white. Clear empties the mask."><div class="t1">Invert / clear</div></div>
-              <div class="row"><button class="btn ghost" id="maskInv" onclick="maskInvert()">Invert</button><button class="btn ghost" onclick="maskOp('clear')">Clear</button></div></div>
           </div>
           <div class="pane">
             <div class="pane-title">Tracing image</div>
@@ -246,6 +246,7 @@
               </div>
               <button class="btn" id="profNew" data-tip="A new profile with the default buttons">New</button>
               <button class="btn" id="profDup" data-tip="A copy of this profile">Duplicate</button>
+              <button class="btn ghost" id="profPresets" data-tip="Adds back any built-in Photoshop set that's missing">Presets</button>
               <button class="btn ghost" id="profDel">Delete</button>
             </div>
           <div class="pm-wrap" id="pmWrap"></div>
@@ -281,11 +282,6 @@
               <summary><div class="tx"><div class="t1">Theme</div><div class="t2" id="themeName"></div></div>
                 <svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3"/></svg></summary>
               <div class="themes" id="themes" role="radiogroup" aria-label="Theme"></div>
-            </details>
-            <details class="disclose">
-              <summary><div class="tx" data-tip="The opening animation. Plays at the next start."><div class="t1">Splash</div><div class="t2" id="splashName"></div></div>
-                <svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3"/></svg></summary>
-              <div class="themes" id="splashes" role="radiogroup" aria-label="Splash"></div>
             </details>
             <div class="opt"><div class="tx" data-tip="For reMarkable Paper Pro; rM2 and rM1 in beta. Not affiliated with reMarkable AS."><div class="t1">About</div><div class="t2">ReDrawable <span id="appVersion"></span></div></div></div>
           </div>
