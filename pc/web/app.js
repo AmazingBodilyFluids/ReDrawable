@@ -1250,6 +1250,28 @@ const Panel = {
     if (p) return p[this.side];
     return this.side === "right" ? S.default_buttons_right : S.default_buttons;
   },
+  // Edit Left / Right: unfold that panel and show it close up; the same button again (or "Whole
+  // tablet") shows the whole tablet. zoomY scrolls the close-up (mouse wheel).
+  zoomed: false, zoomY: 0,
+  async editSide(side) {
+    if (side === this.side && this.zoomed) { this.zoomed = false; this.render(); return; }
+    this.zoomed = true; this.zoomY = 0;
+    await this.setSide(side);
+    const key = side === "right" ? "panel_open_right" : "panel_open";
+    if (S.cfg[key] === false) { S.cfg[key] = true; setKey(key, true).then(refresh); }
+    this.sig = ""; this.render();
+  },
+  zoomAt(w, h, L, fitK) {
+    if (!this.zoomed) return null;
+    const pad = 16, W = L.P || S.panel_px;
+    // about 60 % of the tablet's height in view, the panel at most 60 % of the picture's width
+    const k = Math.min((h - 2 * pad) / (0.6 * L.VH), 0.6 * w / W, 1.2);
+    if (k <= fitK * 1.15) return null;  // already as big as it gets
+    const right = this.side === "right", full = L.VH * k + 2 * pad;
+    this.zoomY = Math.max(0, Math.min(this.zoomY, full - h));
+    const ox = right ? w - pad - L.VW * k : pad;
+    return { k, ox, oy: pad - this.zoomY };
+  },
   async setSide(side) {
     if (side === this.side) return;
     await this.flush();
@@ -1312,7 +1334,7 @@ const Panel = {
     if (!this.btns || (!this.dirty && saved !== JSON.stringify(this.btns))) this.btns = JSON.parse(saved);
     if (view !== "panel") return;
     this.renderProfiles();
-    const sig = JSON.stringify([this.btns, this.sel, S.cfg, S.view, this.side, S.output, S.light, S.mask_vers]);
+    const sig = JSON.stringify([this.btns, this.sel, S.cfg, S.view, this.side, S.output, S.light, S.mask_vers, this.zoomed, this.zoomY]);
     if (sig !== this.sig) { this.sig = sig; this.draw(); }
     if (!this.recording && document.activeElement !== $("#peName") && document.activeElement !== $("#peKeys")) this.fill();
     this.renderTaps();
@@ -1499,12 +1521,21 @@ const Panel = {
     const W = S.panel_px, T = S.tab_px;
     // the whole tablet as Home draws it (other panel, mask strip, paper), with this panel on top to edit
     if (!$(".pm-cv", wrap)) {
-      wrap.innerHTML = `<canvas class="pm-cv"></canvas><div class="pm-ov"></div>`;
+      wrap.innerHTML = `<canvas class="pm-cv"></canvas><div class="pm-ov"></div>
+        <button class="btn pm-unzoom" hidden data-tip="Back to the whole tablet">Whole tablet</button>`;
+      $(".pm-unzoom", wrap).onclick = () => { this.zoomed = false; this.render(); };
+      wrap.addEventListener("wheel", e => {
+        if (!this.zoomed) return;
+        e.preventDefault();
+        this.zoomY += e.deltaY; this.render();
+      }, { passive: false });
       $(".pm-cv", wrap).onclick = e => this.canvasClick(e);
       $(".pm-cv", wrap).onmousemove = e => { e.currentTarget.style.cursor = this.geo && this.canvasHit(e) ? "pointer" : "default"; };
     }
-    const g = Scr.drawTo($(".pm-cv", wrap));
+    const g = Scr.drawTo($(".pm-cv", wrap), (w, h, L, k) => this.zoomAt(w, h, L, k));
     if (!g) return;
+    const zb = $(".pm-unzoom", wrap);
+    if (zb) zb.hidden = !(this.zoomed && Math.abs(g.k - Math.min((wrap.clientWidth - 32) / g.L.VW, (wrap.clientHeight - 32) / g.L.VH)) > 1e-3);
     const k = g.k;
     this.geo = g;
     const px = v => (v * k).toFixed(1) + "px";
@@ -1709,7 +1740,7 @@ const Panel = {
     $("#rotRecord").onclick = () => this.recordRotate();
     window.addEventListener("keyup", e => this.onKey(e), true);
     this.initProfiles();
-    for (const b of $$("#pmSide button")) b.onclick = () => this.setSide(b.dataset.v);
+    for (const b of $$("#pmSide button")) b.onclick = () => this.editSide(b.dataset.v);
     $("#pmReset").onclick = () => {
       this.btns = JSON.parse(JSON.stringify(this.defaults()));
       this.save();
@@ -1794,19 +1825,21 @@ const Scr = {
     this.note(g.L);
   },
   // The same picture on another canvas (Panel & gestures), leaving Home's geometry and move mode alone.
-  drawTo(cv) {
+  drawTo(cv, zoom) {
     if (!S || !S.view || !cv.offsetParent) return null;
     this.load();
-    const keep = { k: this.k, ox: this.ox, oy: this.oy, L: this.L, drag: this.drag, sheet: this.sheet };
-    this.drag = null; this.sheet = false;
+    const keep = { k: this.k, ox: this.ox, oy: this.oy, L: this.L, drag: this.drag, sheet: this.sheet, zoom: this.zoom };
+    this.drag = null; this.sheet = false; this.zoom = zoom || null;
     const g = this.paint(cv);
     Object.assign(this, keep);
     return g;
   },
   paint(cv) {
     const [ctx, w, h] = fitCanvas(cv), L = this.layout(), pad = 16;
-    const k = Math.min((w - 2 * pad) / L.VW, (h - 2 * pad) / L.VH);
-    const ox = (w - L.VW * k) / 2, oy = (h - L.VH * k) / 2;
+    let k = Math.min((w - 2 * pad) / L.VW, (h - 2 * pad) / L.VH);
+    let ox = (w - L.VW * k) / 2, oy = (h - L.VH * k) / 2;
+    const z = this.zoom && this.zoom(w, h, L, k);  // Panel & gestures: close up on the panel being edited
+    if (z) ({ k, ox, oy } = z);
     this.k = k;  // page() sizes hairlines by it
     ctx.clearRect(0, 0, w, h);
     roundRect(ctx, ox - 14, oy - 14, L.VW * k + 28, L.VH * k + 28, 14);
