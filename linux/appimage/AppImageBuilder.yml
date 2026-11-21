@@ -61,6 +61,14 @@ AppDir:
       - libwayland-*
       - libx11-*
 
+  # WebKitGTK starts its helper processes (WebKitNetworkProcess, WebKitWebProcess) from a path
+  # compiled into the library. GLib spawns them with posix_spawn, which the runtime's path hooks
+  # don't see, so the path itself is rewritten to one of the same length relative to the working
+  # directory ("/usr" -> "././"); app.py changes into $APPDIR/usr before the window starts.
+  after_bundle:
+    - sed -i -e 's|/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1|././/lib/x86_64-linux-gnu/webkit2gtk-4.1|g' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
+    - grep -c '././/lib/x86_64-linux-gnu/webkit2gtk-4.1' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
+
   files:
     include: []
     exclude:
@@ -79,10 +87,6 @@ AppDir:
       GDK_PIXBUF_MODULE_FILE: '${APPDIR}/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache'
       GST_PLUGIN_SYSTEM_PATH: '${APPDIR}/usr/lib/x86_64-linux-gnu/gstreamer-1.0'
       APPDIR_LIBRARY_PATH: '${APPDIR}/usr/lib/x86_64-linux-gnu:${APPDIR}/lib/x86_64-linux-gnu'
-    # WebKitGTK starts its helper processes from a path compiled into the library; appimage-builder's
-    # runtime hooks point that path into the AppImage.
-    path_mappings:
-      - /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1:$APPDIR/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1
 
 AppImage:
   arch: x86_64
