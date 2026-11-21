@@ -1,0 +1,68 @@
+# Builds every download for a release and puts them on a DRAFT GitHub release: the Windows installer
+# and portable zip (installer/build.ps1), the Linux AppImage and Flatpak (linux-packages.yml).
+# A draft is visible only to the repository's owners; publishing it stays a manual step after testing.
+name: Release draft
+
+on:
+  workflow_dispatch:
+  push:  # a dispatch needs the file on main; from a test branch the notes file starts it
+    branches: ["claude/**"]
+    paths: ["docs/release-notes-*.md", ".github/workflows/release.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    uses: ./.github/workflows/linux-packages.yml
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        continue-on-error: true  # reported, but a Windows-only test quirk shouldn't stop the build
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check paramiko
+          cd pc; python -m unittest test_shapes test_rmtablet test_panel
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Build installer and portable zip
+        shell: pwsh
+        run: .\installer\build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            installer/dist/ReDrawable-Setup-*.exe
+            installer/dist/ReDrawable-Portable-*.zip
+
+  draft:
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Create or update the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' pc/version.py)
+          mkdir out
+          find dl -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.flatpak' \) -exec cp {} out/ \;
+          (cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          NOTES=docs/release-notes-$V.md
+          [ -f "$NOTES" ] || { echo "missing $NOTES"; exit 1; }
+          if gh release view "v$V" >/dev/null 2>&1; then
+            [ "$(gh release view "v$V" --json isDraft -q .isDraft)" = true ] || { echo "v$V is already published"; exit 1; }
+            gh release upload "v$V" out/* --clobber
+            gh release edit "v$V" --notes-file "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "v$V" out/* --draft --title "ReDrawable $V" --notes-file "$NOTES" --target "$GITHUB_SHA"
+          fi
+          gh release view "v$V" --json url,isDraft

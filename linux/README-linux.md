@@ -1,7 +1,7 @@
 # ReDrawable on Linux (beta)
 
 Status: **beta, not yet tested with a tablet on a real Linux desktop.** The same app as the Windows
-release (0.11.0), with a Linux back end. It is written for Wayland desktops that use libinput (Hyprland,
+release (0.12.0), with a Linux back end. It is written for Wayland desktops that use libinput (Hyprland,
 GNOME, KDE, Sway) and for X11. Targets for the first test: **Omarchy** (Arch + Hyprland) and **Fedora**
 (GNOME).
 
