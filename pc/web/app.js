@@ -56,6 +56,7 @@ function applyOS() {
   if (osDone || !S) return;
   osDone = true;
   document.documentElement.dataset.os = S.os || "windows";
+  document.documentElement.dataset.session = S.session || "";
   if (!LINUX()) return;
   Panel.PRESETS = Panel.LINUX_PRESETS;
   $("#pePreset").innerHTML = `<option value="">Choose…</option>` +

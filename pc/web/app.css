@@ -442,3 +442,5 @@ ol.steps li .sub { color:var(--dim2); font-size:12px; margin-top:2px; }
 /* one page for both systems (applyOS in app.js) */
 html[data-os="linux"] .win-only { display: none !important; }
 html:not([data-os="linux"]) .linux-only { display: none !important; }
+/* Wayland: the compositor places and sizes windows, so minimise and maximise do nothing useful */
+html[data-session="wayland"] .no-wayland { display: none !important; }
