@@ -187,10 +187,31 @@
       <div class="home-split">
         <div class="stack home-set">
           <div class="seg subnav" id="peTabs"><button data-v="panels" class="on">Shortcut panels</button><button data-v="gestures">Gestures</button></div>
+          <div class="pane">
+            <div class="pane-title" data-tip="Buttons and finger mode are saved per profile. The arrows on the tablet switch profiles.">Profile</div>
+            <div class="prof-row prof-left">
+              <div class="combo" id="profCombo">
+                <input class="input" id="profName" maxlength="24" readonly data-tip="Click for your profiles, double-click to rename" autocomplete="off" spellcheck="false">
+                <button class="combo-btn" id="profChev" type="button" data-tip="Your profiles" aria-haspopup="listbox" aria-expanded="false"></button>
+                <div class="combo-list" id="profList" role="listbox" hidden></div>
+              </div>
+              <button class="btn" id="profNew" data-tip="A new profile with the default buttons">New</button>
+              <button class="btn" id="profDup" data-tip="A copy of this profile">Duplicate</button>
+              <button class="btn ghost" id="profPresets" data-tip="Adds back any built-in Photoshop set that's missing" data-linux-tip="Adds back the built-in Krita set if it's missing">Presets</button>
+              <button class="btn ghost" id="profDel">Delete</button>
+            </div>
+          </div>
           <div class="pane pe-panels">
             <div class="pane-title">Panels</div>
             <div class="opt"><div class="tx" data-tip="16 buttons a side. Profile arrows switch both. The corner tab on the tablet folds a panel away."><div class="t1">Shortcuts</div></div>
               <div class="seg" data-key="panel"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="both">Both</button><button data-v="off">Off</button></div></div>
+            <div class="opt"><div class="tx" data-tip="The panel in the picture. Click a button there to edit it, drag one onto another to swap."><div class="t1">Edit</div></div>
+              <div class="seg" id="pmSide" data-tip="Which panel to edit"><button data-v="left" class="on">Left</button><button data-v="right">Right</button></div>
+            </div>
+            <div class="row between mts">
+              <span class="hint" id="pmNote"></span>
+              <button class="btn ghost" id="pmReset" data-tip="This panel's buttons back to the defaults">Restore defaults</button>
+            </div>
           </div>
           <div class="pane pe-panels" id="peEditor">
             <div class="pane-title" id="peTitle">Button</div>
@@ -220,12 +241,13 @@
           </div>
           <div class="pane pe-gestures" hidden>
             <div class="pane-title">Finger gestures</div>
-            <div class="opt"><div class="tx" data-tip="3 fingers: undo / redo. 2: pan, zoom. 5: rotate, reset, clear. Off while the pen is near."><div class="t1">On</div></div>
+            <div class="opt"><div class="tx" data-tip="3 fingers: undo / redo. 2: pan, zoom. 5: rotate, reset, clear. Off while the pen is near."><div class="t1">On</div><div class="t2 touch-off"></div></div>
               <label class="switch"><input type="checkbox" data-key="gestures"><span class="track"></span></label></div>
             <div class="opt"><div class="tx" data-tip="Shortcuts: gestures send keys. Windows touch: the tablet acts as a touchscreen. Saved with the profile." data-linux-tip="Shortcuts: gestures send keys. Touchscreen: the tablet acts as a touchscreen. Saved with the profile."><div class="t1">Finger mode</div></div>
               <div class="seg" id="profTouch"><button data-v="shortcuts">Shortcuts</button><button data-v="windows" data-linux="Touchscreen">Windows touch</button></div></div>
             <div class="opt"><div class="tx" data-tip="Held for a 5-finger twist. Photoshop: r. Krita, Clip Studio: shift+space." data-linux-tip="Held for a 5-finger twist. Krita: shift+space. Apps that rotate with R: r."><div class="t1">Rotate key</div></div>
-              <input class="input mono" data-key="rotate_keys" style="width:130px"></div>
+              <div class="row"><input class="input mono" id="rotKeys" data-key="rotate_keys" readonly style="width:110px" data-tip="Press Record, then the key">
+                <button class="btn blue" id="rotRecord">Record</button></div></div>
             <div class="opt"><div class="tx" data-tip="Swipe distance for each undo or redo."><div class="t1">Swipe step</div></div>
               <div class="seg" data-key="swipe_step"><button data-v="70">Short</button><button data-v="100">Medium</button><button data-v="150">Long</button></div></div>
             <div class="row between mt"><span class="hint" id="lastAction"></span>
@@ -233,27 +255,12 @@
           </div>
           <div class="pane pe-gestures" hidden>
             <div class="pane-title" data-tip="Quick taps on the drawing area. Empty keys switch one off.">Tap gestures</div>
+            <div class="hint touch-off"></div>
             <div class="taps mt" id="tapList"></div>
           </div>
         </div>
         <div class="pane home-preview pe-preview">
-            <div class="prof-row">
-              <div class="seg" id="pmSide" data-tip="Which panel to edit"><button data-v="left" class="on">Left</button><button data-v="right">Right</button></div>
-              <div class="combo" id="profCombo">
-                <input class="input" id="profName" maxlength="24" readonly data-tip="Click for your profiles, double-click to rename" autocomplete="off" spellcheck="false">
-                <button class="combo-btn" id="profChev" type="button" data-tip="Your profiles" aria-haspopup="listbox" aria-expanded="false"></button>
-                <div class="combo-list" id="profList" role="listbox" hidden></div>
-              </div>
-              <button class="btn" id="profNew" data-tip="A new profile with the default buttons">New</button>
-              <button class="btn" id="profDup" data-tip="A copy of this profile">Duplicate</button>
-              <button class="btn ghost" id="profPresets" data-tip="Adds back any built-in Photoshop set that's missing" data-linux-tip="Adds back the built-in Krita set if it's missing">Presets</button>
-              <button class="btn ghost" id="profDel">Delete</button>
-            </div>
           <div class="pm-wrap" id="pmWrap"></div>
-          <div class="row between mts">
-            <span class="hint" id="pmNote" data-tip="Click a button to edit it, drag one onto another to swap."></span>
-            <button class="btn ghost" id="pmReset">Restore defaults</button>
-          </div>
         </div>
       </div>
     </section>

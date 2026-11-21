@@ -11,8 +11,8 @@ VENV="$DATA/redrawable/venv"
 
 echo "== 1/4 System packages"
 if command -v pacman >/dev/null 2>&1; then
-  # libinput (with its debug-events tool) is part of every Arch desktop already
-  sudo pacman -S --needed python python-gobject webkit2gtk-4.1
+  # libinput-tools: the `libinput` command linux/check_devices.py uses (Arch ships it apart from libinput)
+  sudo pacman -S --needed python python-gobject webkit2gtk-4.1 libinput-tools
 elif command -v dnf >/dev/null 2>&1; then
   # libinput-utils: the `libinput` command linux/check_devices.py uses
   sudo dnf install -y python3 python3-gobject webkit2gtk4.1 libinput-utils

@@ -273,6 +273,28 @@ def clean_buttons(btns):
     return out
 
 
+# Photoshop's keys, the Windows defaults, for the settings that are not part of a profile
+PHOTOSHOP_GLOBAL = {"rotate_keys": "r", "1x3": "ctrl+shift+alt+n", "5x2": "r+esc"}
+
+
+def linux_keys(cfg):
+    """Settings carried over from Windows (or a Paper Tablet test build) keep Photoshop's rotate key
+    and tap keys, which are global, not per profile. On Linux they become Krita's once; anything
+    the user changed stays."""
+    if not sys.platform.startswith("linux") or cfg.get("linux_keys"):
+        return
+    cfg["linux_keys"] = 1
+    if cfg.get("rotate_keys") in ("", None, PHOTOSHOP_GLOBAL["rotate_keys"]):
+        cfg["rotate_keys"] = DEFAULTS["rotate_keys"]
+    if isinstance(cfg.get("taps"), dict):
+        taps = {k: dict(v) if isinstance(v, dict) else v for k, v in cfg["taps"].items()}
+        for slot in ("1x3", "5x2"):
+            t = taps.get(slot)
+            if isinstance(t, dict) and str(t.get("keys") or "").lower().replace(" ", "") == PHOTOSHOP_GLOBAL[slot]:
+                t["keys"] = DEFAULT_TAPS[slot]["keys"]
+        cfg["taps"] = taps
+
+
 def clean_taps(taps):
     """Validated copy of the tap gestures: every slot, real keys or none."""
     taps = taps if isinstance(taps, dict) else {}
@@ -565,6 +587,14 @@ class Companion:
         if line.startswith("ACT:"):
             self.engine.tablet_action(line[4:].strip())
             return
+        if "has fallen behind" in line:  # the e-paper driver's own warning, many per second while drawing
+            now = time.time()
+            self.behind_n = getattr(self, "behind_n", 0) + 1
+            if now - getattr(self, "behind_at", 0) < 60:
+                return
+            if self.behind_n > 1:
+                line += f"  ({self.behind_n - 1} more like this in the last minute)"
+            self.behind_at, self.behind_n = now, 0
         self.log.append(line)
         print("tablet screen:", line, flush=True)
         if "first frame drawn" in line:
@@ -754,6 +784,7 @@ class Engine:
         if self.cfg.get("panel_buttons") == OLD_DEFAULT_BUTTONS:
             self.cfg["panel_buttons"] = DEFAULT_BUTTONS
         load_profiles(self.cfg)
+        linux_keys(self.cfg)
         if "mask_side" not in saved.get("gui", {}):  # it used to sit opposite the one panel
             self.cfg["mask_side"] = "left" if self.cfg.get("panel") == "right" else "right"
         if self.cfg.get("palm_size") == 28:  # first guess, in raw units; Qt reports ~0.75 of that
@@ -1008,7 +1039,9 @@ class Engine:
 
     def mask_thumbs(self):
         """Each mask's thumbnail for the tablet's mask strip, as data URLs by mask id."""
-        return {k: "data:image/png;base64," + base64.b64encode(m.thumb()).decode("ascii") for k, m in self.masks.items()}
+        # list(): masks are added and removed from the UI thread while this runs on another
+        return {k: "data:image/png;base64," + base64.b64encode(m.thumb()).decode("ascii")
+                for k, m in list(self.masks.items())}
 
     def view_size(self):
         """The tablet screen as it sits on the desk, in panel pixels (width, height)."""
@@ -1495,7 +1528,15 @@ class Engine:
             sx, sy = self.pan_scale()
             self.mouse.move(int(round(dx * sx)), int(round(dy * sy)))
 
-    ROT_RADIUS = 300  # screen pixels from the window centre to where the rotate drag runs
+    ROT_RADIUS = 300  # most screen pixels from the window centre to where the rotate drag runs
+
+    def rot_radius(self, cx, cy):
+        """The drag runs a fifth of the screen's short side above the centre (at most ROT_RADIUS):
+        a fixed 300 px reached the menus and toolbars on a 768 px tall screen."""
+        for l, t, r, b in getattr(self, "monitors", None) or []:
+            if l <= cx < r and t <= cy < b:
+                return int(max(60, min(self.ROT_RADIUS, 0.2 * min(r - l, b - t))))
+        return self.ROT_RADIUS
 
     def rotate(self, args):
         """Five-finger twist: hold the rotate key and drag around the window centre by the same
@@ -1515,7 +1556,8 @@ class Engine:
             self.rot_back = self.mouse._cursor()
             self.rot_c = keys.foreground_center()
             cx, cy = self.rot_c
-            self.mouse.begin_at(cx, cy - self.ROT_RADIUS)
+            self.rot_r = self.rot_radius(cx, cy)
+            self.mouse.begin_at(cx, cy - self.rot_r)
         elif args[0] == "end":
             if getattr(self, "rot_c", None) is None:
                 return
@@ -1534,7 +1576,8 @@ class Engine:
             except ValueError:
                 return
             cx, cy = self.rot_c
-            x, y = cx + self.ROT_RADIUS * math.cos(a), cy + self.ROT_RADIUS * math.sin(a)
+            r = getattr(self, "rot_r", self.ROT_RADIUS)
+            x, y = cx + r * math.cos(a), cy + r * math.sin(a)
             sx, sy = self.mouse.start
             self.mouse.move(int(round(x - sx)), int(round(y - sy)))
 

@@ -7,8 +7,12 @@ the pen hovers over your screen for a moment, keep hands off). Add --full to als
 debug-events may need sudo or the input group; without it you get only the device list."""
 import os, struct, subprocess, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pc"))
+import shutil
 import rmtablet as rt, linuxinput as li, keys
 FULL = "--full" in sys.argv
+if not shutil.which("libinput"):
+    sys.exit("The `libinput` command is missing. Install it first: Arch / Omarchy `sudo pacman -S libinput-tools`, "
+             "Fedora `sudo dnf install libinput-utils`, Debian / Ubuntu `sudo apt install libinput-tools`.")
 
 EV = struct.Struct("<qqHHi")
 EV_SYN, EV_KEY, EV_ABS = 0, 1, 3

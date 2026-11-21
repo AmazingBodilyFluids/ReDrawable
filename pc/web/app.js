@@ -1346,6 +1346,7 @@ const Panel = {
       };
       $("[data-rec]", row).onclick = e => {
         if (this.recTap === slot) { this.record(false); return; }
+        if (this.recording) this.record(false);
         this.recTap = slot;
         this.record(true);
         e.target.textContent = "Press keys…";
@@ -1380,6 +1381,9 @@ const Panel = {
     $("#profDel").disabled = profs.length < 2;
     const tm = (profs[cur] || {}).touch || "shortcuts";
     for (const b of $$("#profTouch button")) b.classList.toggle("on", b.dataset.v === tm);
+    // Touchscreen / Windows touch hands the fingers to the desktop: the tablet's own gestures are off
+    const off = tm === "windows" ? (LINUX() ? "Off in Touchscreen mode" : "Off in Windows touch mode") : "";
+    for (const el of $$(".touch-off")) el.textContent = off;
   },
   async flush() {  // a pending button edit belongs to the profile it was made in
     if (!this.t) return;
@@ -1533,8 +1537,10 @@ const Panel = {
     Object.assign(ov.style, { left: g.ox + "px", top: g.oy + "px", width: vw * k + "px", height: vh * k + "px" });
     ov.innerHTML = `${open && here ? panel : ""}${here ? tab : ""}`;
     Duck.draw();
-    $("#pmNote").textContent = !here ? `The ${this.side} panel is off; its buttons can still be set` :
-      open ? `${vw} × ${vh} px, panel ${W} wide` : "Folded: unfold to edit";
+    $("#pmNote").textContent = !here ? `${this.side === "right" ? "Right" : "Left"} panel off` :
+      open ? `${vw} × ${vh} px, panel ${W} wide` : "Panel folded";
+    $("#pmNote").dataset.tip = !here ? "Its buttons can still be set. Turn it on under Shortcuts." :
+      open ? "" : "Click the corner tab in the picture (or on the tablet) to unfold it and edit its buttons.";
     for (const c of $$(".pm-cell", wrap)) {
       c.onclick = () => { this.sel = +c.dataset.i; this.render(); this.fill(true); };
       c.ondragstart = e => { e.dataTransfer.setData("text/plain", c.dataset.i); c.classList.add("drag"); };
@@ -1598,27 +1604,44 @@ const Panel = {
     }[code] || null;
   },
 
+  // Record: the first key (with any modifiers held) ends it; Esc or a click anywhere else cancels.
+  // recTap = a tap-gesture slot, recRot = the rotate key; otherwise the selected panel button.
   record(on) {
     this.recording = on;
     this.mods = [];
-    $("#peRecord").textContent = on ? "Cancel" : "Record";
-    $("#peRecord").classList.toggle("rec", on);
-    if (on && !this.recTap) this.hint("Press the keys now, the way you would on the keyboard.");
+    const own = on && !this.recTap && !this.recRot;
+    $("#peRecord").textContent = own ? "Cancel" : "Record";
+    $("#peRecord").classList.toggle("rec", own);
+    if (own) this.hint("Press the keys now. Esc cancels.");
     if (!on) {
+      // the focused Record button kept the tap list from redrawing, so it stayed on "Press keys…"
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      for (const b of $$("[data-rec], #rotRecord")) { b.textContent = "Record"; b.classList.remove("rec"); }
       if (this.recTap) { this.recTap = null; $("#tapList").dataset.sig = ""; this.renderTaps(); }
+      this.recRot = false;
       this.fill(true);
     }
+  },
+  recordRotate() {
+    if (this.recRot) { this.record(false); return; }
+    if (this.recording) this.record(false);
+    this.recRot = true;
+    this.record(true);
+    $("#rotRecord").textContent = "Press keys…";
+    $("#rotRecord").classList.add("rec");
   },
   onKey(e) {
     if (!this.recording) return;
     e.preventDefault();
     e.stopPropagation();
     const n = this.codeName(e.code);
+    // Esc alone cancels; with a modifier held (Ctrl+Esc ...) it is recorded
+    if (e.type === "keydown" && e.code === "Escape" && !this.mods.length) { this.record(false); return; }
     if (e.type === "keydown") {
-      if (!n) { this.hint(`That key (${e.code}) can't be sent yet.`, true); if (this.recTap) toast(`That key (${e.code}) can't be sent yet.`); return; }
+      if (!n) { this.hint(`That key (${e.code}) can't be sent yet.`, true); if (this.recTap || this.recRot) toast(`That key (${e.code}) can't be sent yet.`); return; }
       if (["ctrl", "shift", "alt", "win"].includes(n)) {
         if (!this.mods.includes(n)) this.mods.push(n);
-        if (!this.recTap) this.hint(this.label(this.mods.join("+")) + " +");
+        if (!this.recTap && !this.recRot) this.hint(this.label(this.mods.join("+")) + " +");
         return;
       }
       this.finish([...this.order(this.mods), n].join("+"));
@@ -1628,6 +1651,13 @@ const Panel = {
   },
   order(mods) { return ["ctrl", "shift", "alt", "win"].filter(m => mods.includes(m)); },
   finish(spec) {
+    if (this.recRot) {
+      this.record(false);
+      S.cfg.rotate_keys = spec;
+      $("#rotKeys").value = spec;
+      setKey("rotate_keys", spec).then(refresh);
+      return;
+    }
     if (this.recTap) {
       const slot = this.recTap, t = { ...S.taps[slot], keys: spec };
       if (!t.t) t.t = this.label(spec);
@@ -1672,6 +1702,11 @@ const Panel = {
     };
     $("#peRecord").onclick = () => this.record(!this.recording);
     window.addEventListener("keydown", e => this.onKey(e), true);
+    // a click anywhere but a Record button cancels recording
+    window.addEventListener("mousedown", e => {
+      if (this.recording && !(e.target.closest && e.target.closest("[data-rec], #peRecord, #rotRecord"))) this.record(false);
+    }, true);
+    $("#rotRecord").onclick = () => this.recordRotate();
     window.addEventListener("keyup", e => this.onKey(e), true);
     this.initProfiles();
     for (const b of $$("#pmSide button")) b.onclick = () => this.setSide(b.dataset.v);

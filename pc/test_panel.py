@@ -599,6 +599,19 @@ class Rotate(unittest.TestCase):
         e.tablet_action("rotate end")
         self.assertEqual(e.keys.held, {"shift"})
 
+    def test_radius_fits_a_small_screen(self):
+        # Omarchy laptop, 1366 x 768: 300 px above Krita's centre (683, 397) landed in its toolbar
+        e = bare_engine()
+        e.monitors = [(0, 0, 1366, 768)]
+        keys_c = keys.foreground_center
+        keys.foreground_center = lambda: (683, 397)
+        self.addCleanup(setattr, keys, "foreground_center", keys_c)
+        e.tablet_action("rotate begin")
+        self.assertEqual(e.mouse.start, (683, 397 - 153))  # a fifth of 768
+        e.tablet_action("rotate end")
+        e.monitors = [(0, 0, 3840, 2160)]
+        self.assertEqual(e.rot_radius(1920, 1080), core.Engine.ROT_RADIUS)  # big screens: as before
+
     def test_stray_rotate_moves_are_ignored(self):
         e = bare_engine()
         e.tablet_action("rotate 30")
@@ -768,3 +781,29 @@ class WiFi(unittest.TestCase):
         e = self.engine(via="wifi", connected=False, wifi=True, wifi_host="192.168.0.100")
         with self.assertRaises(PermissionError):
             e.open_tablet()
+
+
+class LinuxKeys(unittest.TestCase):
+    """Settings from the Windows / Photoshop setup: the global rotate and tap keys become Krita's once."""
+    def run_on_linux(self, cfg):
+        old = core.sys.platform
+        core.sys.platform = "linux"
+        try:
+            core.linux_keys(cfg)
+        finally:
+            core.sys.platform = old
+        return cfg
+
+    def test_photoshop_keys_become_krita_once(self):
+        cfg = self.run_on_linux({"rotate_keys": "r", "taps": {"5x2": {"t": "Reset rotation", "keys": "r+esc"},
+                                                                "1x3": {"t": "New layer", "keys": "ctrl+shift+alt+n"},
+                                                                "2x1": {"t": "Save", "keys": "ctrl+s"}}})
+        if core.sys.platform.startswith("linux"):
+            self.assertEqual(cfg["rotate_keys"], "shift+space")
+            self.assertEqual(cfg["taps"]["5x2"]["keys"], "5")
+            self.assertEqual(cfg["taps"]["1x3"]["keys"], "insert")
+        self.assertEqual(cfg["taps"]["2x1"]["keys"], "ctrl+s")  # the user's own: kept
+        self.assertEqual(cfg["linux_keys"], 1)
+        cfg["rotate_keys"] = "r"  # chosen again later: stays
+        self.run_on_linux(cfg)
+        self.assertEqual(cfg["rotate_keys"], "r")

@@ -444,3 +444,8 @@ html[data-os="linux"] .win-only { display: none !important; }
 html:not([data-os="linux"]) .linux-only { display: none !important; }
 /* Wayland: the compositor places and sizes windows, so minimise and maximise do nothing useful */
 html[data-session="wayland"] .no-wayland { display: none !important; }
+
+/* Panel & gestures: the profile row lives in the left column, the picture gets the right side */
+.prof-row.prof-left { margin-bottom:0; }
+.prof-left .combo { flex:1 1 100%; }
+.prof-left .btn { flex:1 1 auto; }
