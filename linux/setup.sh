@@ -49,6 +49,7 @@ Exec=$DIR/linux/redrawable.sh
 Icon=$DIR/pc/icons/redrawable.png
 Terminal=false
 Categories=Graphics;Utility;
+StartupWMClass=redrawable
 DESKTOP
 
 echo

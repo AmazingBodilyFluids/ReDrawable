@@ -1,0 +1,63 @@
+# Builds the Linux packages (Flatpak bundle and AppImage) as downloadable workflow artifacts.
+# It never publishes a release: that stays a manual step after testing.
+name: Linux packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**", "linux", "linux-test"]
+    paths: ["pc/**", "tablet/**", "linux/**", ".github/workflows/linux-packages.yml"]
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --user paramiko
+      - run: cd pc && python3 -m unittest test_shapes test_rmtablet test_panel test_linux
+
+  flatpak:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - run: git clone --depth 1 https://github.com/flathub/shared-modules linux/flatpak/shared-modules
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ReDrawable-0.11.0.flatpak
+          manifest-path: linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+          upload-artifact: true
+
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: appimage-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-pip python3-setuptools patchelf \
+            desktop-file-utils libgdk-pixbuf2.0-dev fakeroot strace squashfs-tools zsync gtk-update-icon-cache
+          sudo pip3 install "appimage-builder==1.1.0" "packaging<22"
+          appimage-builder --recipe linux/appimage/AppImageBuilder.yml --skip-tests
+      - name: Start it once (headless) to catch missing libraries
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb x11-utils
+          chmod +x ReDrawable-0.11.0-x86_64.AppImage
+          cat > smoke.sh <<'EOF'
+          #!/bin/sh
+          APPIMAGE_EXTRACT_AND_RUN=1 REDRAWABLE_SPLASH=0 timeout 40 ./ReDrawable-0.11.0-x86_64.AppImage > run.log 2>&1 &
+          sleep 30
+          xwininfo -root -tree | grep -i redrawable
+          wait
+          EOF
+          chmod +x smoke.sh
+          xvfb-run -a ./smoke.sh | tee windows.txt
+          tail -40 run.log ~/.config/ReDrawable/redrawable.log || true
+          grep -q '"ReDrawable": ("redrawable"' windows.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReDrawable-0.11.0-x86_64.AppImage
+          path: ReDrawable-0.11.0-x86_64.AppImage

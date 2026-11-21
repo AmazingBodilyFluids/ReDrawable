@@ -1,0 +1,61 @@
+# ReDrawable as a Flatpak (beta). Build (needs flatpak-builder and flathub's GNOME 48 runtime):
+#   git clone --depth 1 https://github.com/flathub/shared-modules linux/flatpak/shared-modules
+#   flatpak-builder --user --install-deps-from=flathub --force-clean --repo=repo build \
+#       linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.yml
+#   flatpak build-bundle repo ReDrawable.flatpak io.github.amazingbodilyfluids.ReDrawable
+# .github/workflows/linux-packages.yml does exactly this.
+#
+# The pip step downloads during the build (build-args --share=network): fine for building it yourself
+# or in CI, not accepted by Flathub as it is.
+app-id: io.github.amazingbodilyfluids.ReDrawable
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: redrawable
+finish-args:
+  - --share=network            # SSH to the tablet (USB network 10.11.99.1, or Wi-Fi)
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=all               # /dev/uinput: the virtual pen, keys and mouse
+  - --filesystem=xdg-config/ReDrawable:create   # settings, calibration, masks (same place as from source)
+  - --filesystem=xdg-config/PaperTablet:ro      # carried over once from the Paper Tablet test builds
+  - --filesystem=~/.ssh:create                  # the app's own key, rmtablet_ed25519
+  - --talk-name=org.kde.StatusNotifierWatcher   # tray icon (waybar, KDE, GNOME AppIndicator extension)
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.Flatpak         # hyprctl (monitors, focused app) and pkexec on the host
+modules:
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
+  - name: python-deps
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --no-cache-dir --prefix=/app "pywebview==6.2.1" "paramiko>=3.4"
+
+  - name: redrawable
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/share/redrawable
+      - cp -r pc tablet /app/share/redrawable/
+      - rm -rf /app/share/redrawable/pc/__pycache__ /app/share/redrawable/pc/test_*.py
+      - install -Dm755 linux/flatpak/redrawable.sh /app/bin/redrawable
+      - install -Dm644 pc/icons/redrawable.png /app/share/icons/hicolor/256x256/apps/io.github.amazingbodilyfluids.ReDrawable.png
+      - install -Dm644 pc/icons/redrawable-off.png /app/share/icons/hicolor/256x256/apps/io.github.amazingbodilyfluids.ReDrawable-off.png
+      - install -Dm644 linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.desktop -t /app/share/applications
+      - install -Dm644 linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.metainfo.xml -t /app/share/metainfo
+      # fail the build here, not on the user's desk, if the runtime lacks what the window needs
+      - python3 -c "import gi; gi.require_version('WebKit2', '4.1'); gi.require_version('AyatanaAppIndicator3', '0.1'); from gi.repository import WebKit2, AyatanaAppIndicator3; import webview, paramiko; print('deps ok')"
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .github
+          - installer
+          - docs
+          - linux/flatpak/shared-modules
+          - build
+          - repo

@@ -30,6 +30,15 @@ import rmtablet as rt  # noqa: E402
 # and it must be in place before any window exists.
 MONITORS = rt.monitors()
 
+if sys.platform.startswith("linux"):
+    # The window's app id on Wayland / class on X11, which launchers and the dock match to the .desktop
+    # file (otherwise it would be "app.py"). Set before GTK starts.
+    try:
+        from gi.repository import GLib
+        GLib.set_prgname(os.environ.get("FLATPAK_ID") or "redrawable")
+        GLib.set_application_name("ReDrawable")
+    except Exception:
+        pass
 import webview  # noqa: E402
 
 import penmask  # noqa: E402
@@ -243,13 +252,21 @@ class Api:
     def restart_onboarding(self):
         self._engine.set("onboarded", False)
 
+    def setup_uinput(self):
+        """Linux: install the uinput rule (password prompt), then try the pen again."""
+        import linuxinput
+        ok, msg = linuxinput.setup_uinput()
+        if ok and self._engine and self._engine.connected and not self._engine.output_on:
+            self._engine.set_output(True)
+        return {"ok": ok, "msg": msg}
+
     def open_calibration_pdf(self):
         path = os.path.normpath(os.path.join(HERE, "..", "tablet", "calibration-landscape.pdf"))
         if sys.platform == "win32":
             os.startfile(os.path.dirname(path))  # noqa: S606 (opens the folder in Explorer)
         elif sys.platform.startswith("linux"):
             import subprocess
-            subprocess.Popen(["xdg-open", os.path.dirname(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return path
 
     def pick_trace_image(self):

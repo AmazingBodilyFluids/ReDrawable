@@ -856,6 +856,7 @@ class Engine:
             "key_names": sorted(keys.VK), "key_labels": keys.LABEL, "default_buttons": DEFAULT_BUTTONS,
             "os": "linux" if sys.platform.startswith("linux") else "windows" if sys.platform == "win32" else sys.platform,
             "session": os.environ.get("XDG_SESSION_TYPE", "") if sys.platform.startswith("linux") else "",
+            "uinput_ok": __import__("linuxinput").available() if sys.platform.startswith("linux") else True,
             "default_buttons_right": DEFAULT_BUTTONS_RIGHT, "presets": {p["name"]: {"left": p["buttons"], "right": p["buttons_right"]} for p in PRESETS},
             "pen_rate": self.rate.last, "mask_ver": self.pmask.ver, "mask_pct": round(100 * self.pmask.coverage()),
             "gesture_list": self.gesture_list(), "trace_key": self.trace_key(), "mask_vers": {k: m.ver for k, m in self.masks.items()},
@@ -1840,7 +1841,7 @@ class Engine:
             if not linuxinput.available():
                 self.output_on = False
                 self.set_status("error", "No access to /dev/uinput, so the pen can't be created. "
-                                "Run linux/setup.sh once (it adds a udev rule), then log out and back in.")
+                                "Settings → Pen device → Allow (asks for your password once).")
                 return None
             try:
                 return linuxinput.LinuxPen()

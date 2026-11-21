@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.amazingbodilyfluids.ReDrawable</id>
+  <name>ReDrawable</name>
+  <summary>Use a reMarkable tablet as a pressure-sensitive pen tablet</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Plug a reMarkable Paper Pro (reMarkable 2 and 1 in beta) into your PC and draw in Krita, GIMP,
+    Inkscape or any app with tablet support: pressure, tilt, hover and the eraser end. Independent project,
+    not made or endorsed by reMarkable AS.</p>
+  </description>
+  <launchable type="desktop-id">io.github.amazingbodilyfluids.ReDrawable.desktop</launchable>
+  <url type="homepage">https://github.com/AmazingBodilyFluids/ReDrawable</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.11.0" date="2026-11-21"/>
+  </releases>
+</component>

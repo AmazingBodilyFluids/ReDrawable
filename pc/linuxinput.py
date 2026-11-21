@@ -55,6 +55,47 @@ def available():
     return os.access("/dev/uinput", os.W_OK)
 
 
+FLATPAK = os.path.exists("/.flatpak-info")
+# The rule linux/setup.sh installs, as one script: lets the logged-in user create virtual input devices
+UINPUT_RULE = 'KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"'
+UINPUT_SCRIPT = ("set -e; printf '%s\\n' '" + UINPUT_RULE + "' > /etc/udev/rules.d/60-redrawable-uinput.rules; "
+                 "echo uinput > /etc/modules-load.d/redrawable-uinput.conf; modprobe uinput; "
+                 "udevadm control --reload-rules; udevadm trigger --name-match=uinput")
+
+
+def host(cmd):
+    """A command for the real system: inside a Flatpak it goes out through flatpak-spawn --host."""
+    return ["flatpak-spawn", "--host"] + list(cmd) if FLATPAK else list(cmd)
+
+
+def host_has(name):
+    if FLATPAK:
+        try:
+            return subprocess.run(host(["sh", "-c", "command -v " + name]), capture_output=True,
+                                  timeout=3).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+    return bool(shutil.which(name))
+
+
+def setup_uinput():
+    """Install the uinput rule with the desktop's password prompt (pkexec). Returns (ok, message)."""
+    if available():
+        return True, "The pen device is already allowed."
+    try:
+        r = subprocess.run(host(["pkexec", "sh", "-c", UINPUT_SCRIPT]), capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.SubprocessError) as ex:
+        return False, f"Couldn't ask for the password ({ex}). Run linux/setup.sh, or the commands in linux/README-linux.md."
+    if r.returncode != 0:
+        return False, (r.stderr.strip() or "Cancelled.")[-300:]
+    import time
+    for _ in range(20):  # udev hands the device to this session a moment later
+        if available():
+            return True, "Done: the pen device is allowed."
+        time.sleep(0.25)
+    return False, "The rule is in place, but this session hasn't got access yet: log out and back in once."
+
+
 class UInput:
     """One virtual input device."""
 
@@ -280,10 +321,10 @@ def devices():
 # --------------------------------------------------------------------------- compositor queries
 
 def _run_json(cmd):
-    if not shutil.which(cmd[0]):
+    if not FLATPAK and not shutil.which(cmd[0]):
         return None
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=2).stdout
+        out = subprocess.run(host(cmd), capture_output=True, text=True, timeout=2).stdout
         return json.loads(out) if out.strip() else None
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
@@ -353,7 +394,7 @@ def monitors():
 def active_window():
     """(app name, (centre x, centre y)) of the focused window. ("", None) if Hyprland can't say;
     (None, None) where there is no way to ask (GNOME, KDE and other Wayland desktops keep it private)."""
-    if not shutil.which("hyprctl") or not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") or not (FLATPAK or shutil.which("hyprctl")):
         return None, None
     w = _run_json(["hyprctl", "activewindow", "-j"])
     if not w:
@@ -373,9 +414,9 @@ LAST_PEN = None  # where the virtual pen last put the cursor, in layout pixels
 def cursor_pos():
     """Hyprland: the real cursor. Elsewhere: where the pen last was (the pen moves the cursor),
     else the middle of the desktop."""
-    if shutil.which("hyprctl") and os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and (FLATPAK or shutil.which("hyprctl")):
         try:
-            out = subprocess.run(["hyprctl", "cursorpos"], capture_output=True, text=True, timeout=2).stdout
+            out = subprocess.run(host(["hyprctl", "cursorpos"]), capture_output=True, text=True, timeout=2).stdout
             x, y = out.replace(",", " ").split()[:2]
             return int(float(x)), int(float(y))
         except (OSError, ValueError, subprocess.SubprocessError):

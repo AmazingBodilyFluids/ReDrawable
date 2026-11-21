@@ -126,8 +126,20 @@ function statusBar(s) {
   if (document.activeElement !== $("#sbWifi")) $("#sbWifi").checked = !!S.cfg.wifi;
 }
 
+async function allowUinput() {
+  $("#uinputBtn").disabled = true;
+  try {
+    const r = await api().setup_uinput();
+    toast(r.msg);
+  } finally { $("#uinputBtn").disabled = false; refresh(); }
+}
+
 function render() {
   const s = status();
+  if (LINUX()) {
+    $("#uinputState").textContent = S.uinput_ok ? "Allowed" : "Not allowed yet: the pen can't reach the desktop";
+    $("#uinputBtn").hidden = !!S.uinput_ok;
+  }
   statusBar(s);
 
   $("#sbWifi").closest("label").dataset.tip = (S.cfg.wifi

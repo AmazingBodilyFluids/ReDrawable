@@ -13,6 +13,10 @@ import subprocess
 import threading
 
 ICONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+# In a Flatpak the tray (outside the sandbox) can't read the app's files: the icons are the ones the
+# Flatpak exports to the system icon theme, named after the app id.
+APP_ID = os.environ.get("FLATPAK_ID", "")
+ICON_ON, ICON_OFF = (APP_ID, APP_ID + "-off") if APP_ID else ("redrawable", "redrawable-off")
 
 
 def _gi():
@@ -64,9 +68,10 @@ class Tray:
         def build():
             try:
                 Gtk = self.Gtk
-                self.ind = Ind.Indicator.new("redrawable", "redrawable-off",
+                self.ind = Ind.Indicator.new("redrawable", ICON_OFF,
                                              Ind.IndicatorCategory.APPLICATION_STATUS)
-                self.ind.set_icon_theme_path(ICONS)
+                if not APP_ID:
+                    self.ind.set_icon_theme_path(ICONS)
                 self.ind.set_title("ReDrawable")
                 self.ind.set_status(Ind.IndicatorStatus.ACTIVE)
                 menu = Gtk.Menu()
@@ -107,7 +112,7 @@ class Tray:
         def apply():
             if not self.ind:
                 return False
-            self.ind.set_icon_full("redrawable" if connected else "redrawable-off",
+            self.ind.set_icon_full(ICON_ON if connected else ICON_OFF,
                                    "connected" if connected else "not connected")
             self._busy = True
             self.pen_item.set_active(bool(output))
@@ -118,9 +123,14 @@ class Tray:
 
     def balloon(self, title, text):
         try:
-            subprocess.Popen(["notify-send", "-a", "ReDrawable", "-i", os.path.join(ICONS, "redrawable.png"),
-                              title, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except OSError:
+            from gi.repository import Gio, GLib
+            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            bus.call("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                     "org.freedesktop.Notifications", "Notify",
+                     GLib.Variant("(susssasa{sv}i)", ("ReDrawable", 0, APP_ID or os.path.join(ICONS, "redrawable.png"),
+                                                      title, text, [], {}, 8000)),
+                     None, Gio.DBusCallFlags.NONE, 2000, None, None, None)
+        except Exception:
             pass
 
     def back_color(self, _c):

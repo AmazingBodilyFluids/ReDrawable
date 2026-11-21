@@ -269,6 +269,8 @@
               <div class="field"><span class="lbl">User</span><input class="input mono" data-key="user"></div>
             </div>
             <div class="field mt"><span class="lbl" data-tip="Optional; the app's own key by default">Key file</span><input class="input mono" data-key="key" placeholder="the app's own key"></div>
+            <div class="opt linux-only mt"><div class="tx" data-tip="Linux: the pen, keys and gestures are virtual input devices (/dev/uinput). Allowing them adds one system rule and asks for your password once."><div class="t1">Pen device</div><div class="t2" id="uinputState"></div></div>
+              <button class="btn" id="uinputBtn" onclick="allowUinput()">Allow</button></div>
           </div>
           <div class="pane">
             <div class="pane-title">App</div>
