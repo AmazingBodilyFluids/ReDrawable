@@ -1381,9 +1381,6 @@ const Panel = {
     $("#profDel").disabled = profs.length < 2;
     const tm = (profs[cur] || {}).touch || "shortcuts";
     for (const b of $$("#profTouch button")) b.classList.toggle("on", b.dataset.v === tm);
-    // Touchscreen / Windows touch hands the fingers to the desktop: the tablet's own gestures are off
-    const off = tm === "windows" ? (LINUX() ? "Off in Touchscreen mode" : "Off in Windows touch mode") : "";
-    for (const el of $$(".touch-off")) el.textContent = off;
   },
   async flush() {  // a pending button edit belongs to the profile it was made in
     if (!this.t) return;
@@ -1425,8 +1422,11 @@ const Panel = {
     document.addEventListener("keydown", e => { if (e.key === "Escape" && !list.hidden) show(false); });
     for (const b of $$("#profTouch button")) b.onclick = () => {
       const p = profs();
+      if (p[S.cfg.panel_profile].touch === b.dataset.v) return;
       p[S.cfg.panel_profile].touch = b.dataset.v;
       this.setProfiles(p);
+      // the desktop gets the raw touches, so the tablet's own gestures go off (and back on with Shortcuts)
+      setKey("gestures", b.dataset.v !== "windows").then(refresh);
     };
     $("#profName").onchange = e => {
       const p = profs(), name = e.target.value.trim();
