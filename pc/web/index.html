@@ -75,43 +75,8 @@
             <div class="opt"><div class="tx" data-tip="What the preview draws besides the pen's position"><div class="t1">Show</div></div>
               <div class="row" id="viewTogs"><button class="btn ghost" data-flag="view_pressure" data-tip="Line width follows pressure">Pressure</button><button class="btn ghost" data-flag="view_tilt" data-tip="Ticks point where the pen leans">Tilt</button><button class="btn ghost" data-flag="view_hover" data-tip="A dotted path while the pen hovers">Hover</button></div></div>
           </div>
-          <div class="pane">
-            <div class="pane-title" data-tip="A stencil for the pen: black blocks it, white lets it through. None turns it off.">Pen mask</div>
-            <div class="prof-row">
-              <div class="combo" id="maskCombo">
-                <input class="input" id="maskName" maxlength="24" placeholder="None" readonly data-tip="Click for your masks, double-click to rename" autocomplete="off" spellcheck="false">
-                <button class="combo-btn" id="maskChev" type="button" data-tip="Your masks" aria-haspopup="listbox" aria-expanded="false"></button>
-                <div class="combo-list" id="maskList" role="listbox" hidden></div>
-              </div>
-              <button class="btn" onclick="$('#maskFile').click()" data-tip="A mask from an image: black blocks the pen.">Add mask</button><input type="file" id="maskFile" accept="image/*" hidden onchange="maskFromImage(this)">
-              <div class="samples-wrap"><button class="btn ghost" id="maskSamples" type="button" aria-haspopup="true" aria-expanded="false" data-tip="Masks that come with ReDrawable: paper textures, patterns and shapes">Samples</button>
-                <div class="samples" id="sampleGrid" hidden></div></div>
-              <button class="btn ghost" id="maskDel">Delete</button>
-            </div>
-            <p class="hint mts" id="maskInfo"></p>
-            <div class="opt"><div class="tx" data-tip="A corner tab on the tablet for masks and paper."><div class="t1">Mask strip</div></div>
-              <div class="seg maskSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
-            <div class="opt"><div class="tx" data-tip="Default: corner tab always shown, pen and fingers use it. Pen hover: while the strip is folded its tab shows only when the pen hovers along that edge; tap it to open. Finger only: tab and strip stay shown, the pen draws through them, only fingers use them."><div class="t1">Button</div></div>
-              <div class="seg" data-key="mask_show"><button data-v="always">Default</button><button data-v="hover">Pen hover</button><button data-v="tap">Finger only</button></div></div>
-            <div class="opt"><div class="tx" data-tip="Move: drag on the preview, wheel or pinch to scale. Reset: back to full size. Invert swaps black and white. Clear empties the mask."><div class="t1">Place</div></div>
-              <div class="row"><button class="btn ghost" id="maskMove" onclick="Scr.toggleMove('mask')">Move</button><button class="btn ghost" id="maskCentre" onclick="maskCentre()">Reset</button><button class="btn ghost" id="maskInv" onclick="maskInvert()">Invert</button><button class="btn ghost" onclick="maskOp('clear')">Clear</button></div></div>
-            <div class="opt"><div class="tx" id="maskModeTx"><div class="t1">Grey sets</div></div>
-              <div class="seg" data-key="mask_mode"><button data-v="fade">Opacity</button><button data-v="gate">Pressure</button></div></div>
-            <div class="opt" style="display:block"><div class="range-row"><span data-tip="How strongly grey holds the pen back">Intensity</span><input type="range" min="0" max="2" step="0.05" data-key="mask_strength" data-type="float"><span class="v" id="maskStrV"></span></div></div>
-            <div class="opt" style="display:block"><div class="range-row"><span data-tip="Left: softer greys. Right: towards a hard black and white cut-out.">Contrast</span><input type="range" min="0.25" max="6" step="0.25" data-key="mask_contrast" data-type="float"><span class="v" id="maskConV"></span></div></div>
-          </div>
-          <div class="pane">
-            <div class="pane-title">Tracing image</div>
-            <div class="opt"><div class="tx" data-tip="A picture to trace over"><div class="t1">Image</div><div class="t2 clip" id="traceName">None</div></div>
-              <div class="row"><button class="btn" onclick="pickTrace()">Choose…</button><button class="btn ghost" id="traceDel" onclick="setKey('trace_file','').then(refresh)">Remove</button></div></div>
-            <div class="opt"><div class="tx" data-tip="Drag on the preview to move; wheel or pinch to scale. Reset puts it back to full size."><div class="t1">Place</div></div>
-              <div class="row"><button class="btn ghost" id="traceMove" onclick="Scr.toggleMove('trace')">Move</button><button class="btn ghost" onclick="resetTrace()">Reset</button></div></div>
-            <div class="opt" style="display:block"><div class="range-row"><span>Strength</span><input type="range" min="0.1" max="1" step="0.05" data-key="trace_opacity" data-type="float"><span class="v" id="traceV"></span></div></div>
-            <div class="opt"><div class="tx" data-tip="Fingers move and zoom the image on the tablet. Tap the black note there to finish."><div class="t1">Move on tablet</div></div>
-              <label class="switch"><input type="checkbox" data-key="trace_adjust"><span class="track"></span></label></div>
-          </div>
         </div>
-        <div class="pane home-preview">
+        <div class="pane home-preview" id="homePrev">
         <div class="stage-head">
           <div class="pane-title" data-tip="As it sits on your desk. Strokes aren't shown.">Tablet screen</div>
           <span class="hint" id="scrHint"></span>
@@ -188,8 +153,8 @@
     <section class="view" id="view-panel">
       <div class="home-split">
         <div class="stack home-set">
-          <div class="seg subnav" id="peTabs"><button data-v="panels" class="on">Shortcut panels</button><button data-v="gestures">Gestures</button></div>
-          <div class="pane">
+          <div class="seg subnav" id="peTabs"><button data-v="panels" class="on">Shortcuts</button><button data-v="mask">Mask</button><button data-v="trace">Tracing</button><button data-v="gestures">Gestures</button></div>
+          <div class="pane pe-prof">
             <div class="pane-title" data-tip="Buttons and finger mode are saved per profile. The arrows on the tablet switch profiles.">Profile</div>
             <div class="prof-row prof-left">
               <div class="combo" id="profCombo">
@@ -205,9 +170,9 @@
           </div>
           <div class="pane pe-panels">
             <div class="pane-title">Panels</div>
-            <div class="opt"><div class="tx" data-tip="16 buttons a side. Profile arrows switch both. The corner tab on the tablet folds a panel away."><div class="t1">Shortcuts</div></div>
+            <div class="opt"><div class="tx" data-tip="16 buttons a side. Profile arrows switch both. The corner tab on the tablet folds a panel away. Opening one folds the mask and tracing image panels."><div class="t1">Show</div></div>
               <div class="seg" data-key="panel"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="both">Both</button><button data-v="off">Off</button></div></div>
-            <div class="opt"><div class="tx" data-tip="Default: fold button always shown, pen and fingers press the buttons. Pen hover: a folded panel's fold button shows only while the pen hovers along that edge; tap it to open the panel. Finger only: panels stay shown, the pen draws through them, only fingers press."><div class="t1">Button</div></div>
+            <div class="opt"><div class="tx" data-tip="Default: tab always shown, pen and fingers use it. Pen hover: with that side's panels folded, the tab shows only while the pen hovers along the edge. Finger only: the pen draws through the tab and panel, only fingers use them."><div class="t1">Button</div></div>
               <div class="seg" data-key="panel_show"><button data-v="always">Default</button><button data-v="hover">Pen hover</button><button data-v="tap">Finger only</button></div></div>
             <div class="opt"><div class="tx" data-tip="Shows that panel unfolded and close up (scroll to see all of it). Press it again for the whole tablet. Click a button there to edit it, drag one onto another to swap."><div class="t1">Edit</div></div>
               <div class="seg" id="pmSide" data-tip="Which panel to edit"><button data-v="left" class="on">Left</button><button data-v="right">Right</button></div>
@@ -260,6 +225,47 @@
           <div class="pane pe-gestures" hidden>
             <div class="pane-title" data-tip="Quick taps on the drawing area. Empty keys switch one off.">Tap gestures</div>
             <div class="taps mt" id="tapList"></div>
+          </div>
+          <div class="pane pe-mask" hidden>
+            <div class="pane-title" data-tip="A stencil for the pen: black blocks it, white lets it through. None turns it off.">Pen mask</div>
+            <div class="opt"><div class="tx" data-tip="Side of the tablet for the mask panel and its corner tab. Off removes the tab. Opening it folds the other panels."><div class="t1">Show</div></div>
+              <div class="seg maskSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Default: tab always shown, pen and fingers use it. Pen hover: with that side's panels folded, the tab shows only while the pen hovers along the edge. Finger only: the pen draws through the tab and panel, only fingers use them."><div class="t1">Button</div></div>
+              <div class="seg" data-key="mask_show"><button data-v="always">Default</button><button data-v="hover">Pen hover</button><button data-v="tap">Finger only</button></div></div>
+            <div class="prof-row">
+              <div class="combo" id="maskCombo">
+                <input class="input" id="maskName" maxlength="24" placeholder="None" readonly data-tip="Click for your masks, double-click to rename" autocomplete="off" spellcheck="false">
+                <button class="combo-btn" id="maskChev" type="button" data-tip="Your masks" aria-haspopup="listbox" aria-expanded="false"></button>
+                <div class="combo-list" id="maskList" role="listbox" hidden></div>
+              </div>
+              <button class="btn" onclick="$('#maskFile').click()" data-tip="A mask from an image: black blocks the pen.">Add mask</button><input type="file" id="maskFile" accept="image/*" hidden onchange="maskFromImage(this)">
+              <div class="samples-wrap"><button class="btn ghost" id="maskSamples" type="button" aria-haspopup="true" aria-expanded="false" data-tip="Masks that come with ReDrawable: paper textures, patterns and shapes">Samples</button>
+                <div class="samples" id="sampleGrid" hidden></div></div>
+              <button class="btn ghost" id="maskDel">Delete</button>
+            </div>
+            <p class="hint mts" id="maskInfo"></p>
+            <div class="opt"><div class="tx" data-tip="Move: drag on the preview, wheel or pinch to scale. Reset: back to full size. Invert swaps black and white. Clear empties the mask."><div class="t1">Place</div></div>
+              <div class="row"><button class="btn ghost" id="maskMove" onclick="Scr.toggleMove('mask')">Move</button><button class="btn ghost" id="maskCentre" onclick="maskCentre()">Reset</button><button class="btn ghost" id="maskInv" onclick="maskInvert()">Invert</button><button class="btn ghost" onclick="maskOp('clear')">Clear</button></div></div>
+            <div class="opt"><div class="tx" id="maskModeTx"><div class="t1">Grey sets</div></div>
+              <div class="seg" data-key="mask_mode"><button data-v="fade">Opacity</button><button data-v="gate">Pressure</button></div></div>
+            <div class="opt" style="display:block"><div class="range-row"><span data-tip="How strongly grey holds the pen back">Intensity</span><input type="range" min="0" max="2" step="0.05" data-key="mask_strength" data-type="float"><span class="v" id="maskStrV"></span></div></div>
+            <div class="opt" style="display:block"><div class="range-row"><span data-tip="Left: softer greys. Right: towards a hard black and white cut-out.">Contrast</span><input type="range" min="0.25" max="6" step="0.25" data-key="mask_contrast" data-type="float"><span class="v" id="maskConV"></span></div></div>
+          </div>
+          <div class="pane pe-trace" hidden>
+            <div class="pane-title" data-tip="Pictures to trace over. The tablet's panel switches between them.">Tracing image</div>
+            <div class="opt"><div class="tx" data-tip="Side of the tablet for the tracing image panel and its corner tab. Off removes the tab. Opening it folds the other panels."><div class="t1">Show</div></div>
+              <div class="seg traceSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Default: tab always shown, pen and fingers use it. Pen hover: with that side's panels folded, the tab shows only while the pen hovers along the edge. Finger only: the pen draws through the tab and panel, only fingers use them."><div class="t1">Button</div></div>
+              <div class="seg" data-key="trace_show"><button data-v="always">Default</button><button data-v="hover">Pen hover</button><button data-v="tap">Finger only</button></div></div>
+            <div class="opt"><div class="tx" data-tip="The image under the ink. None hides it."><div class="t1">Image</div></div>
+              <div class="row"><select class="input" id="traceSel" style="width:150px"></select><button class="btn" onclick="pickTrace()" data-tip="Add an image from this computer">Add</button><button class="btn ghost" id="traceDel" onclick="delTrace()" data-tip="Takes it off the list. The file stays.">Delete</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Shown under its picture on the tablet"><div class="t1">Name</div></div>
+              <input class="input" id="traceNm" maxlength="24" style="width:150px" autocomplete="off" spellcheck="false"></div>
+            <div class="opt"><div class="tx" data-tip="Move: drag on the preview, wheel or pinch to scale. Reset: back to full size."><div class="t1">Place</div></div>
+              <div class="row"><button class="btn ghost" id="traceMove" onclick="Scr.toggleMove('trace')">Move</button><button class="btn ghost" onclick="resetTrace()">Reset</button></div></div>
+            <div class="opt" style="display:block"><div class="range-row"><span>Strength</span><input type="range" min="0.1" max="1" step="0.05" data-key="trace_opacity" data-type="float"><span class="v" id="traceV"></span></div></div>
+            <div class="opt"><div class="tx" data-tip="Fingers move and zoom the image on the tablet. Tap the black note there to finish."><div class="t1">Move on tablet</div></div>
+              <label class="switch"><input type="checkbox" data-key="trace_adjust"><span class="track"></span></label></div>
           </div>
         </div>
         <div class="pane home-preview pe-preview">

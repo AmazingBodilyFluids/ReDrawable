@@ -44,41 +44,91 @@ Window {
     readonly property bool panelOnR: mode === "ink" && (panelSide === "right" || panelSide === "both")
     readonly property bool panelOn: panelOnL || panelOnR
     readonly property real panelPx: panelFrac * view.width
-    // "panelshow always|hover|tap" (the PC's Button setting):
-    //   hover: a folded panel's fold button is hidden until the pen hovers along that edge a moment;
-    //          a pen tap on it opens the panel. Hidden, the corner is drawing area.
-    //   tap:   the panels stay shown, but only fingers press them; the pen draws through them
+    // "panelshow K M T" (the PC's Button setting for each kind of panel: shortcuts, mask, tracing image):
+    //   hover: with every panel on a side folded, that kind's corner tab is hidden until the pen
+    //          hovers along the edge a moment; a pen tap on it opens the panel. Hidden, the corner
+    //          is drawing area.
+    //   tap:   only fingers work the tab and the panel; the pen draws through them
     property string panelShow: "always"
-    property string maskShow: "always"   // the same for the mask strip's corner tab and the strip
-    property bool peekL: false           // hover: the folded panel's fold button is showing
+    property string maskShow: "always"
+    property string traceShow: "always"
+    property bool peekL: false           // hover: this side's hidden tabs are showing
     property bool peekR: false
-    property bool peekS: false           // hover: the folded mask strip's corner tab is showing
     property string hoverSide: ""        // where the pen hovers, waiting for hoverTimer
-    function peeked(s) { return s === "strip" ? peekS : s === "right" ? peekR : peekL }
-    function tabHidden(s) { return panelShow === "hover" && !sideOpen(s) && !peeked(s) }
-    function stripTabHidden() { return maskShow === "hover" && !stripOpen && !peekS }
+    function peeked(s) { return s === "right" ? peekR : peekL }
+    // ---- the three kinds of panel: "keys" (shortcuts, one a side), "mask", "trace" (tracing images).
+    // A side's kinds each have a corner tab, in this order from the corner, and open in the same
+    // place. Only one kind is open at a time: opening one folds the others.
+    function kinds(s) {
+        var k = []
+        if (s === "right" ? panelOnR : panelOnL) k.push("keys")
+        if (mode === "ink" && stripAvail && stripSide === s) k.push("mask")
+        if (mode === "ink" && tstripAvail && tstripSide === s) k.push("trace")
+        return k
+    }
+    function kindOpen(k, s) { return k === "keys" ? sideOpen(s) : k === "mask" ? stripOpen : tstripOpen }
+    function kindShow(k) { return k === "keys" ? panelShow : k === "mask" ? maskShow : traceShow }
+    function openKind(s) {  // the kind open on this side, or ""
+        var k = kinds(s)
+        for (var i = 0; i < k.length; i++) if (kindOpen(k[i], s)) return k[i]
+        return ""
+    }
+    function tabShown(k, s) { return kindShow(k) !== "hover" || openKind(s) !== "" || peeked(s) }
+    function tabX(s, i) { return s === "right" ? view.width - (i + 1) * tabS : i * tabS }
+    function tabAt(p) {  // the corner tab under p: {k, s}, or null
+        if (p.y < 0 || p.y >= tabS) return null
+        var sides = ["left", "right"]
+        for (var j = 0; j < 2; j++) {
+            var s = sides[j], k = kinds(s)
+            var i = Math.floor((s === "right" ? view.width - p.x : p.x) / tabS)
+            if (i >= 0 && i < k.length && tabShown(k[i], s)) return {k: k[i], s: s}
+        }
+        return null
+    }
+    // what of the panels is under p: {t: "tab" | "body", k, s}, or null
+    function uiAt(p) {
+        var t = tabAt(p)
+        if (t) return {t: "tab", k: t.k, s: t.s}
+        var l = openKind("left"), r = openKind("right")
+        if (l !== "" && p.x < panelPx) return {t: "body", k: l, s: "left"}
+        if (r !== "" && p.x >= view.width - panelPx) return {t: "body", k: r, s: "right"}
+        return null
+    }
+    // a tab: opens its panel and folds every other kind, or folds its own
+    function toggle(k, s) {
+        var on = !kindOpen(k, s)
+        if (on) {
+            if (k !== "keys") { panelOpen = false; panelOpenR = false }
+            if (k !== "mask") stripOpen = false
+            if (k !== "trace") tstripOpen = false
+        }
+        if (k === "keys") { if (s === "right") panelOpenR = on; else panelOpen = on }
+        else if (k === "mask") stripOpen = on
+        else tstripOpen = on
+        if (!on && kindShow(k) === "hover") setPeek(s, true)   // just folded under the pen: the tabs stay a moment
+        act(k === "keys" ? "panel " + s + " " + (on ? 1 : 0) : (k === "mask" ? "maskstrip " : "tracestrip ") + (on ? 1 : 0))
+    }
     function setPeek(s, on) {
         if (peeked(s) === on) return
-        if (s === "strip") peekS = on; else if (s === "right") peekR = on; else peekL = on
-        act("peek " + (peekL ? 1 : 0) + " " + (peekR ? 1 : 0) + " " + (peekS ? 1 : 0))
+        if (s === "right") peekR = on; else peekL = on
+        act("peek " + (peekL ? 1 : 0) + " " + (peekR ? 1 : 0))
         if (!on) refreshScreen()   // the ink and paper under it come back in one clean pass
     }
-    function unpeek() { hoverSide = ""; hoverTimer.stop(); setPeek("left", false); setPeek("right", false); setPeek("strip", false) }
-    // the edge of a folded panel under p ("left", "right" or ""), where hovering shows its fold button
+    function unpeek() { hoverSide = ""; hoverTimer.stop(); setPeek("left", false); setPeek("right", false) }
+    // the side under p whose panels are all folded and have a hidden tab ("left", "right" or ""):
+    // hovering along that edge shows it
     function foldedEdgeAt(p) {
-        if (panelShow === "hover") {
-            if (panelOnL && !panelOpen && p.x < panelPx) return "left"
-            if (panelOnR && !panelOpenR && p.x >= view.width - panelPx) return "right"
-        }
-        if (maskShow === "hover" && mode === "ink" && stripAvail && !stripOpen) {
-            var sw = Math.max(tabS, stripFrac * view.width)   // the band the open strip would take
-            if (stripSide === "right" ? p.x >= view.width - stripOff - sw && p.x < view.width - stripOff
-                                      : p.x >= stripOff && p.x < stripOff + sw) return "strip"
+        var sides = ["left", "right"]
+        for (var j = 0; j < 2; j++) {
+            var s = sides[j], k = kinds(s), hid = false
+            if (openKind(s) !== "") continue
+            for (var i = 0; i < k.length; i++) if (kindShow(k[i]) === "hover") hid = true
+            if (hid && (s === "right" ? p.x >= view.width - panelPx : p.x < panelPx)) return s
         }
         return ""
     }
-    // hovering still for a moment brings the button up; contact never does, so a stroke can run
-    // into the corner. It goes a moment after the pen leaves that edge.
+    // hovering still for a moment brings the tabs up; contact never does, so a stroke can run
+    // into the corner. They go a moment after the pen leaves that edge.
     function peekPen(p, touching, inRange) {
         var z = foldedEdgeAt(p)
         if (inRange && !touching && !penDown && z !== "" && !peeked(z)) {
@@ -88,21 +138,18 @@ Window {
         if (inRange && (z !== "" && peeked(z) || penBtn === -2 || penBtn === -6 || stripPen)) peekHide.stop()
         else if (!peekHide.running) peekHide.restart()
     }
-    onPanelShowChanged: unpeek()
+    readonly property bool anyHover: panelShow === "hover" || maskShow === "hover" || traceShow === "hover"
+    onAnyHoverChanged: unpeek()
     Timer { id: hoverTimer; interval: 350; onTriggered: if (win.hoverSide !== "") { win.setPeek(win.hoverSide, true); win.hoverSide = "" } }
     Timer { id: peekHide; interval: 1200; onTriggered: win.unpeek() }
-    // what the open panels keep from the drawing area: nothing with "tap", the pen draws there
-    readonly property real panelWL: panelOnL && panelOpen && panelShow !== "tap" ? panelPx : 0
-    readonly property real panelWR: panelOnR && panelOpenR && panelShow !== "tap" ? panelPx : 0
     // the panel with the gestures button and the light bar: the left one, else the right
     readonly property string mainSide: panelOnL ? "left" : panelOnR ? "right" : ""
     function sideOpen(s) { return s === "right" ? panelOpenR : panelOpen }
     function sideX(s) { return s === "right" ? view.width - panelPx : 0 }
-    // which panel (or folded panel's tab) is under p: "left", "right" or ""
+    // the side whose shortcut panel (or its tab) is under p: "left", "right" or ""
     function panelAt(p) {
-        if (panelOnL && (panelOpen ? p.x < panelPx : (p.x < tabS && p.y < tabS && !tabHidden("left")))) return "left"
-        if (panelOnR && (panelOpenR ? p.x >= view.width - panelPx : (p.x >= view.width - tabS && p.y < tabS && !tabHidden("right")))) return "right"
-        return ""
+        var u = uiAt(p)
+        return u && u.k === "keys" ? u.s : ""
     }
     readonly property real headH: 190   // buttons 32 px under the profile row, as far as the gestures button is under them
     readonly property real profY: tabS + 10   // the profile row: arrows either side of its name
@@ -137,50 +184,55 @@ Window {
     // pen mask: the PC keeps it and sends it as an image (black, alpha = how masked); it is made
     // and placed in the desktop app, and only switched and inverted here
     property string maskSrc: ""
-    // the mask strip: the PC's masks down the side away from the panel; a tap picks one
-    property bool stripAvail: false      // there are masks: the corner tab shows, the strip opens from it
+    // the mask panel: the PC's masks, two across; a tap picks one
+    property bool stripAvail: false      // there are masks: its corner tab shows, the panel opens from it
     property bool stripOpen: false
-    property string stripSide: "right"   // inside a panel on the same side (past its tab if folded)
-    property real stripFrac: 0
+    property string stripSide: "right"
     property var maskList: []            // [{id, name, thumb}]
     property string maskActive: ""
-    property bool stripPen: false        // the pen went down in the strip: nothing else until it lifts
-    readonly property real stripW: mode === "ink" && stripAvail && stripOpen ? stripFrac * view.width : 0
-    readonly property real stripOff: stripSide === "left" ? (panelOnL ? (panelOpen ? panelPx : tabS) : 0)
-                                                          : (panelOnR ? (panelOpenR ? panelPx : tabS) : 0)
-    readonly property real stripX: stripSide === "right" ? view.width - stripOff - stripW : stripOff
-    readonly property real stripTabX: stripSide === "right" ? view.width - stripOff - tabS : stripOff
-    // what the panels and the open strip keep from the drawing area, each side
-    readonly property bool stripOwn: stripW > 0 && maskShow !== "tap"   // "tap": the pen draws through the strip
-    readonly property real resL: stripSide === "left" && stripOwn ? stripOff + stripW : panelWL
-    readonly property real resR: stripSide === "right" && stripOwn ? stripOff + stripW : panelWR
-    readonly property real stripThumbH: (stripW - 24) * view.height / view.width
+    // the tracing image panel: the same for the PC's tracing images
+    property bool tstripAvail: false
+    property bool tstripOpen: false
+    property string tstripSide: "right"
+    property var traceList: []           // [{id, name, thumb}]
+    property string traceActive: ""
+    property bool stripPen: false        // the pen went down in one of them: nothing else until it lifts
+    // what the open panel on each side keeps from the drawing area: nothing with "tap", the pen draws there
+    function resOf(s) { var k = openKind(s); return k !== "" && kindShow(k) !== "tap" ? panelPx : 0 }
+    readonly property real resL: resOf("left")
+    readonly property real resR: resOf("right")
+    readonly property real tileW: (panelPx - 36) / 2
+    readonly property real stripThumbH: tileW * view.height / view.width
     readonly property real stripTileH: stripThumbH + 46
-    readonly property int stripTop: 256   // the thumbnails start under Invert and None
-    function stripTabHit(p) {
-        return mode === "ink" && stripAvail && !stripTabHidden() && p.y < tabS && p.x >= stripTabX && p.x < stripTabX + tabS
-    }
-    function inStrip(p) { return stripTabHit(p) || (stripW > 0 && p.x >= stripX && p.x < stripX + stripW) }
-    function stripPick(p) {  // the corner tab, Invert, None, then a thumbnail and name per mask
-        if (stripTabHit(p)) {
-            stripOpen = !stripOpen; act("maskstrip " + (stripOpen ? 1 : 0))
-            if (maskShow === "hover" && !stripOpen) setPeek("strip", true)   // folded under the pen: the tab stays a moment
+    readonly property int stripTop: 180   // the thumbnails start under the two buttons
+    // a touch in the open mask / tracing image panel on side s: its two buttons, a thumbnail, the paper
+    function listPick(k, s, p) {
+        var lx = p.x - sideX(s), second = lx >= panelPx / 2
+        if (p.y >= 96 && p.y < 166) {
+            if (second) pickId(k, "none")
+            else if (k === "mask") act("maskinvert")   // the panel stays open to show it
+            else if (traceActive !== "") { tstripOpen = false; act("tracestrip 0"); act("traceadjust") }   // Move: out of the way
             return
         }
-        if (p.y >= 96 && p.y < 166) { act("maskinvert"); return }  // the strip stays open to show it
-        if (p.y >= paperTileY && p.y < paperTileY + paperTileH) {  // the paper: left half back, right half on
-            var k = papers.indexOf(paper), n = papers.length
-            act("paper " + papers[((k < 0 ? 0 : k) + (p.x < stripX + stripW / 2 ? n - 1 : 1)) % n])
+        if (k === "mask" && p.y >= paperTileY && p.y < paperTileY + paperTileH) {  // the paper: left half back, right half on
+            var c = papers.indexOf(paper), n = papers.length
+            act("paper " + papers[((c < 0 ? 0 : c) + (second ? 1 : n - 1)) % n])
             return
         }
-        var id = null
-        if (p.y >= 176 && p.y < 246) id = "none"
-        else if (p.y >= stripTop) {
-            var i = Math.floor((p.y - stripTop) / (stripTileH + 10))
-            if (i < maskList.length && (p.y - stripTop) - i * (stripTileH + 10) < stripTileH) id = maskList[i].id
-        }
-        if (id !== null) { stripOpen = false; act("maskpick " + id); if (maskShow === "hover") setPeek("strip", true) }  // picked: the strip folds away
+        if (p.y < stripTop) return
+        var list = k === "mask" ? maskList : traceList, pitch = stripTileH + 10
+        var row = Math.floor((p.y - stripTop) / pitch), i = row * 2 + (second ? 1 : 0)
+        if (i < list.length && (p.y - stripTop) - row * pitch < stripTileH && tileFits(k, row)) pickId(k, list[i].id)
     }
+    function tileFits(k, row) {
+        return stripTop + row * (stripTileH + 10) + stripTileH <= (k === "mask" ? paperTileY - 10 : view.height - 10)
+    }
+    function pickId(k, id) {  // picked: the panel folds away
+        if (k === "mask") { stripOpen = false; act("maskpick " + id) }
+        else { tstripOpen = false; act("tracepick " + id) }
+        if (kindShow(k) === "hover") setPeek(k === "mask" ? stripSide : tstripSide, true)
+    }
+    function stripTouch(u, p) { if (u.t === "tab") toggle(u.k, u.s); else listPick(u.k, u.s, p) }
     // the paper selector at the foot of the strip, in the PC's order (core.PAPERS)
     readonly property var papers: ["plain", "lined", "squared", "dots", "cross", "blueprint", "isometric"]
     readonly property var paperNames: ({ plain: "Plain", lined: "Lined", squared: "Squared", dots: "Dots",
@@ -222,7 +274,13 @@ Window {
     onStripAvailChanged: refreshScreen()
     onMaskSrcChanged: refreshScreen()
     onMaskListChanged: refreshScreen()
-    onStripWChanged: refreshScreen()
+    onResLChanged: refreshScreen()
+    onResRChanged: refreshScreen()
+    onStripOpenChanged: refreshScreen()
+    onTstripOpenChanged: refreshScreen()
+    onTstripAvailChanged: refreshScreen()
+    onTraceListChanged: refreshScreen()
+    onTraceActiveChanged: refreshScreen()
     onAreaChanged: refreshScreen()
     onModeChanged: refreshScreen()
     onPenDownChanged: epMode()
@@ -279,7 +337,7 @@ Window {
         else if (c === "clear") clearInk()
         else if (c === "snap") snap(a)
         else if (c === "panel") { panelSide = a[0]; if (a.length > 1) panelFrac = parseFloat(a[1]) }
-        else if (c === "panelshow") { panelShow = a[0]; maskShow = a[1] || "always"; unpeek() }
+        else if (c === "panelshow") { panelShow = a[0]; maskShow = a[1] || "always"; traceShow = a[2] || "always"; unpeek() }
         else if (c === "panelopen") { panelOpen = a[0] === "1"; if (a.length > 1) panelOpenR = a[1] === "1" }
         else if (c === "paper") { paper = a[0]; if (a.length > 1) paperStep = Math.max(12, parseFloat(a[1])) }
         else if (c === "trace") {  // trace <opacity> <scale> <x> <y> <file or empty>
@@ -294,8 +352,12 @@ Window {
         }
         else if (c === "maskimg") { maskSrc = ""; if (a.length && a[0]) maskSrc = "file://" + a.join(" ") }
         else if (c === "maskstrip") {  // maskstrip <there> <side> <width frac> <open>
-            stripAvail = a[0] === "1"; stripSide = a[1] || "right"; stripFrac = parseFloat(a[2]) || 0; stripOpen = a[3] === "1"
+            stripAvail = a[0] === "1"; stripSide = a[1] || "right"; stripOpen = a[3] === "1"
         }
+        else if (c === "tracestrip") {  // tracestrip <there> <side> <open>
+            tstripAvail = a[0] === "1"; tstripSide = a[1] || "right"; tstripOpen = a[2] === "1"
+        }
+        else if (c === "traces") { var tl = JSON.parse(a.join(" ")); traceActive = tl.active; traceList = tl.list }
         else if (c === "masks") { var m = JSON.parse(a.join(" ")); maskActive = m.active; maskList = m.list }
         else if (c === "profile") { profileCount = parseInt(a[1]); profileName = a.slice(2).join(" ") }
         else if (c === "gestures") {
@@ -351,13 +413,12 @@ Window {
         return q.x >= -20 && q.y >= -20 && q.x < item.width + 20 && q.y < item.height + 20
     }
     // ---- panel: the fold tab and the buttons, by finger or pen
-    function tabHit(p) {  // the side whose fold tab is under p, or ""
-        if (p.y >= tabS) return ""
-        if (panelOnL && p.x < tabS && !tabHidden("left")) return "left"
-        if (panelOnR && p.x >= view.width - tabS && !tabHidden("right")) return "right"
-        return ""
+    function tabHit(p) {  // the side whose shortcut panel's tab is under p, or ""
+        var t = tabAt(p)
+        return t && t.k === "keys" ? t.s : ""
     }
-    function inPanel(p) { return panelAt(p) !== "" }
+    function inPanel(p) { return uiAt(p) !== null }
+
     // -1 / +1 on the profile arrows (only with more than one profile), 0 elsewhere
     function profileArrow(p) {
         var s = panelAt(p)
@@ -377,11 +438,7 @@ Window {
         if (on) l[i] = true; else delete l[i]
         latched = l
     }
-    function fold(s) {
-        if (s === "right") panelOpenR = !panelOpenR; else panelOpen = !panelOpen
-        if (panelShow === "hover" && !sideOpen(s)) setPeek(s, true)   // just folded under the pen: its button stays a moment
-        act("panel " + s + " " + (sideOpen(s) ? 1 : 0))
-    }
+    function fold(s) { toggle("keys", s) }
     // Returns what was pressed: -2 for the fold tab, a button index, or -1.
     function pressAt(p) {
         var t = tabHit(p)
@@ -432,16 +489,16 @@ Window {
             if (gMode !== "" && gMode !== "dead") { endGesture(); sendTouch() }  // the pen came back: a hand on the screen is a palm
         }
         var p = view.mapFromItem(win.contentItem, px, py)
-        if ((panelShow === "hover" || maskShow === "hover") && mode === "ink") peekPen(p, touching, inRange)
-        if (stripPen || (touching && inStrip(p) && maskShow !== "tap")) {  // the mask strip takes the pen (so does the PC); "tap": the pen draws through
+        if (anyHover && mode === "ink") peekPen(p, touching, inRange)
+        var u = uiAt(p), mine = u !== null && kindShow(u.k) !== "tap"   // "tap": the pen draws through
+        if (stripPen || (touching && mine && u.k !== "keys")) {  // the mask and tracing image panels take the pen (so does the PC)
             endStroke()
-            if (touching && !stripPen) { stripPen = true; stripPick(p) }
+            if (touching && !stripPen) { stripPen = true; stripTouch(u, p) }
             if (!touching) stripPen = false
             return
         }
-        // "tap": the pen never presses the panel, it draws through it
-        if (penBtn !== -1 || (touching && inPanel(p) && panelShow !== "tap")) {
-            // the panel takes the pen; the PC ignores the pen over the panel too
+        if (penBtn !== -1 || (touching && mine)) {
+            // the shortcut panel takes the pen; the PC ignores the pen over the panel too
             endStroke()
             if (touching && penBtn === -1) { penBtn = pressAt(p); if (penBtn === -1) penBtn = 99 }
             else if (touching && penBtn === -5 && lightHit(p)) lightAt(p)   // dragging along the light bar
@@ -871,55 +928,64 @@ Window {
             }
         }
 
-        // ---------------------------------------------------------------- mask strip
-        Item {
-            visible: win.stripW > 0
-            x: win.stripX; width: win.stripW; height: view.height
+        // ---------------------------------------------------------------- mask and tracing image panels
+        Repeater {
+          model: ["mask", "trace"]
+          Item {
+            id: lp
+            readonly property string kind: modelData
+            readonly property bool isMask: kind === "mask"
+            readonly property string side: isMask ? win.stripSide : win.tstripSide
+            readonly property string active: isMask ? win.maskActive : win.traceActive
+            readonly property bool firstOn: isMask ? win.maskInvert : win.traceAdjust
+            visible: win.mode === "ink" && (isMask ? win.stripAvail && win.stripOpen : win.tstripAvail && win.tstripOpen)
+            x: win.sideX(side); width: win.panelPx; height: view.height
             Rectangle { anchors.fill: parent; color: "white" }
-            Rectangle { x: win.stripSide === "right" ? 0 : parent.width - 3; width: 3; height: parent.height; color: "black" }
-            Text { x: win.stripSide === "right" ? 0 : win.tabS; y: 28; width: parent.width - win.tabS
-                   horizontalAlignment: Text.AlignHCenter; text: "MASKS"
-                   font.pixelSize: 20; font.bold: true; font.letterSpacing: 3; color: "black" }
-            Rectangle {  // Invert: a toggle for the mask in use
-                x: 12; y: 96; width: parent.width - 24; height: 70; radius: 12
-                color: win.maskInvert ? "black" : "white"; border.width: 3; border.color: "black"
-                Text { anchors.centerIn: parent; text: "Invert"; font.pixelSize: 24; font.bold: true
-                       color: win.maskInvert ? "white" : "black" }
+            Rectangle { x: lp.side === "right" ? 0 : parent.width - 3; width: 3; height: parent.height; color: "black" }
+            Rectangle {  // Invert (the mask in use) / Move (the image, with fingers)
+                x: 12; y: 96; width: win.tileW; height: 70; radius: 12
+                color: lp.firstOn ? "black" : "white"; border.width: 3; border.color: "black"
+                Text { anchors.centerIn: parent; text: lp.isMask ? "Invert" : "Move"; font.pixelSize: 24; font.bold: true
+                       color: lp.firstOn ? "white" : "black" }
             }
             Rectangle {  // None
-                x: 12; y: 176; width: parent.width - 24; height: 70; radius: 12
-                color: win.maskActive === "" ? "black" : "white"; border.width: 3; border.color: "black"
+                x: 24 + win.tileW; y: 96; width: win.tileW; height: 70; radius: 12
+                color: lp.active === "" ? "black" : "white"; border.width: 3; border.color: "black"
                 Text { anchors.centerIn: parent; text: "None"; font.pixelSize: 24; font.bold: true
-                       color: win.maskActive === "" ? "white" : "black" }
+                       color: lp.active === "" ? "white" : "black" }
             }
             Repeater {
-                model: win.maskList
+                model: lp.isMask ? win.maskList : win.traceList
                 Item {
-                    property bool on: modelData.id === win.maskActive
-                    x: 12; y: win.stripTop + index * (win.stripTileH + 10); width: parent.width - 24; height: win.stripTileH
-                    visible: y + height <= win.paperTileY - 10
+                    property bool on: modelData.id === lp.active
+                    x: 12 + (index % 2) * (win.tileW + 12); y: win.stripTop + Math.floor(index / 2) * (win.stripTileH + 10)
+                    width: win.tileW; height: win.stripTileH
+                    visible: win.tileFits(lp.kind, Math.floor(index / 2))
                     Rectangle { width: parent.width; height: win.stripThumbH; color: "white"
                                 border.width: parent.on ? 7 : 2; border.color: "black" }
                     Image { x: 4; y: 4; width: parent.width - 8; height: win.stripThumbH - 8
+                            fillMode: lp.isMask ? Image.Stretch : Image.PreserveAspectFit
                             source: modelData.thumb ? "file://" + modelData.thumb : ""; cache: false; smooth: true }
                     Rectangle { y: win.stripThumbH + 4; width: parent.width; height: 38; radius: 8
                                 color: parent.on ? "black" : "white" }
-                    Text { y: win.stripThumbH + 4; width: parent.width; height: 38; verticalAlignment: Text.AlignVCenter
+                    Text { x: 4; y: win.stripThumbH + 4; width: parent.width - 8; height: 38; verticalAlignment: Text.AlignVCenter
                            horizontalAlignment: Text.AlignHCenter; text: modelData.name; elide: Text.ElideRight
-                           font.pixelSize: 21; font.bold: true; color: parent.on ? "white" : "black" }
+                           font.pixelSize: 20; font.bold: true; color: parent.on ? "white" : "black" }
                 }
             }
             Rectangle {  // Paper: the pattern under the ink; tap the left half for the previous one, the right half for the next
+                visible: lp.isMask
                 x: 12; y: win.paperTileY; width: parent.width - 24; height: win.paperTileH; radius: 12
                 color: "white"; border.width: 3; border.color: "black"
                 Text { x: 0; y: 12; width: parent.width; horizontalAlignment: Text.AlignHCenter; text: "PAPER"
                        font.pixelSize: 17; font.bold: true; font.letterSpacing: 2; color: "black" }
-                Text { x: 10; y: 46; text: "\u25C0"; font.pixelSize: 26; color: "black" }
-                Text { x: parent.width - 10 - width; y: 46; text: "\u25B6"; font.pixelSize: 26; color: "black" }
+                Text { x: 10; y: 46; text: "◀"; font.pixelSize: 26; color: "black" }
+                Text { x: parent.width - 10 - width; y: 46; text: "▶"; font.pixelSize: 26; color: "black" }
                 Text { x: 40; y: 46; width: parent.width - 80; height: 40; horizontalAlignment: Text.AlignHCenter
                        verticalAlignment: Text.AlignVCenter; text: win.paperNames[win.paper] || win.paper
                        font.pixelSize: 23; font.bold: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 14; color: "black" }
             }
+          }
         }
 
         // ---------------------------------------------------------------- side panels
@@ -934,12 +1000,6 @@ Window {
             x: win.sideX(side); width: win.panelPx; height: view.height
             Rectangle { anchors.fill: parent; color: "white" }
             Rectangle { x: panel.side === "right" ? 0 : parent.width - 3; width: 3; height: parent.height; color: "black" }
-            Column {
-                x: panel.side === "right" ? 22 : win.tabS + 14; y: 24
-                width: parent.width - win.tabS - 36; spacing: 8
-                // the name in EB Garamond (main.cpp loads it from memory); the tablet's own font if that failed
-                Text { text: "ReDrawable"; font.family: nameFamily; font.pixelSize: 36; font.weight: Font.DemiBold; color: "black" }
-            }
             Item {  // profile row: < name >
                 id: prof
                 x: 16; y: win.profY; width: parent.width - 32; height: win.profH
@@ -1034,43 +1094,44 @@ Window {
         }
         }
 
-        // The mask strip's corner tab: a half-shaded square at the strip's top corner.
-        Rectangle {
-            visible: win.mode === "ink" && win.stripAvail && !win.stripTabHidden()
-            x: win.stripTabX; y: 0
-            width: win.tabS; height: win.tabS
-            color: win.stripOpen ? "black" : "white"; border.width: 3; border.color: "black"
-            Rectangle {
-                anchors.centerIn: parent; width: 38; height: 38; color: "transparent"
-                border.width: 3; border.color: win.stripOpen ? "white" : "black"
-                Rectangle { x: 3; y: 3; width: 16; height: 32; color: win.stripOpen ? "white" : "black" }
-            }
-        }
-
-        // The fold tabs: top-left corner for the left panel, top-right for the right one.
+        // The corner tabs: one per kind of panel on a side, in a row from that corner. Black while its
+        // panel is open. Shapes from plain rectangles, so they stay crisp on e-ink.
         Repeater {
-          model: ["left", "right"]
-          Rectangle {
-            id: ftab
-            readonly property string side: modelData
-            readonly property bool hot: win.penBtn === (side === "right" ? -6 : -2)
-            visible: (side === "right" ? win.panelOnR : win.panelOnL) && !win.tabHidden(side)
-            x: side === "right" ? view.width - win.tabS : 0; y: 0
+          model: [["left", "keys"], ["left", "mask"], ["left", "trace"], ["right", "keys"], ["right", "mask"], ["right", "trace"]]
+          Item {
+            id: ctab
+            readonly property string side: modelData[0]
+            readonly property string kind: modelData[1]
+            readonly property int slot: win.kinds(side).indexOf(kind)
+            readonly property bool on: win.kindOpen(kind, side)
+            readonly property color fg: on ? "white" : "black"
+            visible: slot >= 0 && win.tabShown(kind, side)
+            x: win.tabX(side, Math.max(0, slot)); y: 0
             width: win.tabS; height: win.tabS
-            color: hot ? "black" : "white"; border.width: 3; border.color: "black"
-            // a solid triangle pointing the way the panel will move, built from 2 px rows so it
-            // stays crisp on e-ink (no anti-aliased edges to drop out)
-            Item {
-                anchors.centerIn: parent; width: 26; height: 36
-                rotation: ((ftab.side === "right") === win.sideOpen(ftab.side)) ? 180 : 0
+            Rectangle {
+                x: 6; y: 6; width: parent.width - 12; height: parent.height - 12; radius: 26
+                color: ctab.on ? "black" : "white"; border.width: 3; border.color: "black"
+            }
+            Repeater {  // shortcuts: four keys
+                model: ctab.kind === "keys" ? 4 : 0
+                Rectangle { x: ctab.width / 2 - 17 + (index % 2) * 20; y: ctab.height / 2 - 17 + Math.floor(index / 2) * 20
+                            width: 14; height: 14; radius: 3; color: ctab.fg; antialiasing: false }
+            }
+            Rectangle {  // mask: a half-shaded square
+                visible: ctab.kind === "mask"
+                anchors.centerIn: parent; width: 38; height: 38; color: "transparent"
+                border.width: 3; border.color: ctab.fg
+                Rectangle { x: 3; y: 3; width: 16; height: 32; color: ctab.fg }
+            }
+            Rectangle {  // tracing image: a framed picture, a hill and a sun
+                visible: ctab.kind === "trace"
+                anchors.centerIn: parent; width: 44; height: 34; color: "transparent"
+                border.width: 3; border.color: ctab.fg
                 Repeater {
-                    model: 18
-                    Rectangle {
-                        property real w: 26 * (1 - Math.abs(index - 8.5) / 9)
-                        x: 26 - w; y: index * 2; width: w; height: 2
-                        color: ftab.hot ? "white" : "black"; antialiasing: false
-                    }
+                    model: 8
+                    Rectangle { x: 7 + (7 - index) * 1.5; y: 12 + index * 2; width: 3 + index * 3; height: 2; color: ctab.fg; antialiasing: false }
                 }
+                Rectangle { x: 30; y: 7; width: 7; height: 7; color: ctab.fg; antialiasing: false }
             }
           }
         }
@@ -1092,9 +1153,10 @@ Window {
                         var tbx = win.touchBtn; tbx[t.pointId] = -1; win.touchBtn = tbx
                         continue
                     }
-                    if (win.inStrip(p)) {  // a mask tile: picked at once, the finger does nothing more
+                    var u = win.uiAt(p)
+                    if (u && u.k !== "keys") {  // a mask or image tile, or their tab: done at once, the finger does nothing more
                         var tbs = win.touchBtn; tbs[t.pointId] = -1; win.touchBtn = tbs
-                        win.stripPick(p)
+                        win.stripTouch(u, p)
                         continue
                     }
                     if (win.inPanel(p)) {  // the panel answers even with the pen hovering: the other hand taps it

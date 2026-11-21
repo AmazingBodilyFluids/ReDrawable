@@ -304,8 +304,23 @@ class Api:
         if not got:
             return None
         path = got[0] if isinstance(got, (list, tuple)) else got
-        self._engine.set("trace_file", path)
+        self._engine.add_trace(path)
         return path
+
+    def trace_thumbs(self):
+        return self._engine.trace_thumbs()
+
+    def set_trace_thumb(self, tid, data_url):
+        self._engine.set_trace_thumb(tid, data_url)
+
+    def pick_trace(self, tid):
+        self._engine.pick_trace(tid)
+
+    def rename_trace(self, tid, name):
+        self._engine.rename_trace(tid, name)
+
+    def delete_trace(self, tid):
+        self._engine.delete_trace(tid)
 
     def open_url(self, url):
         if url.startswith("https://"):

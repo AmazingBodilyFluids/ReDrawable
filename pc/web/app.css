@@ -452,3 +452,6 @@ html[data-session="wayland"] .no-wayland { display: none !important; }
 
 /* Panel & gestures: the close-up of the panel being edited */
 .pm-unzoom { position:absolute; top:10px; z-index:5; left:50%; transform:translateX(-50%); }
+/* the editor's overlay sits on the picture's own panel: the corner tabs under it stay visible and clickable */
+.pm-panel { background:none; pointer-events:none; }
+.pm-panel > * { pointer-events:auto; }

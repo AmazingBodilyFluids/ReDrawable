@@ -149,8 +149,8 @@ function render() {
   if (document.activeElement !== $("#sbPen")) $("#sbPen").checked = !!S.output;
   $("#sbPen").disabled = !S.connected;
   if (document.activeElement !== $("#sbSnap")) $("#sbSnap").checked = !!S.cfg.snap;
-  for (const seg of $$(".maskSide")) {
-    const v = S.cfg.mask_panel === false ? "off" : S.cfg.mask_side || "right";
+  for (const [cls, flag, side] of SIDE_SEGS) for (const seg of $$(cls)) {
+    const v = S.cfg[flag] === false ? "off" : S.cfg[side] || "right";
     for (const b of $$("button", seg)) b.classList.toggle("on", b.dataset.v === v);
   }
   // front light: the level in use, else the one saved for next time
@@ -178,14 +178,11 @@ function render() {
   $("#threshV").textContent = Math.round(S.cfg.threshold * 100) + "%";
   $("#paperV").textContent = (+S.cfg.paper_mm).toFixed(1).replace(/\.0$/, "") + " mm";
   $("#traceV").textContent = Math.round(S.cfg.trace_opacity * 100) + "%";
-  const tf = S.cfg.trace_file || "";
-  $("#traceName").textContent = tf ? tf.split(/[\\/]/).pop() : "None";
-  $("#traceName").dataset.tip = tf;
+  renderTraces();
   $("#maskConV").textContent = "×" + (S.cfg.mask_contrast || 1);
   $("#maskStrV").textContent = Math.round((S.cfg.mask_strength ?? 1) * 100) + "%";
 for (const b of $$("#viewTogs button")) b.classList.toggle("on", S.cfg[b.dataset.flag] !== false);
   $("#maskInv").classList.toggle("on", !!S.cfg.mask_invert);
-  $("#traceDel").disabled = !tf;
   renderMasks();
   $("#maskInfo").textContent = !S.cfg.mask_active ? "" : S.mask_pct ? `${S.mask_pct}% of the screen masked` : "Nothing masked";
   $("#maskModeTx").dataset.tip = S.cfg.mask_mode === "gate"
@@ -298,20 +295,38 @@ for (const seg of $$(".seg[data-key]")) {
     setKey(seg.dataset.key, b.dataset.v).then(refresh);
   });
 }
-// Panel & gestures: two sub-pages in one view, the tablet picture beside both
-for (const b of $$("#peTabs button")) b.onclick = () => {
-  for (const x of $$("#peTabs button")) x.classList.toggle("on", x === b);
-  for (const p of $$(".pe-panels")) p.hidden = b.dataset.v !== "panels";
-  for (const p of $$(".pe-gestures")) p.hidden = b.dataset.v !== "gestures";
-};
+// Panel & gestures: a sub-page per kind of tablet panel, and one for gestures. Shortcuts and
+// Gestures have the panel editor's picture beside them; Mask and Tracing borrow Home's picture
+// (the same element, moved over), so the mask and the image can be dragged into place there.
+let peTab = "panels";
+function placePreview() {
+  const here = view === "panel" && (peTab === "mask" || peTab === "trace"), prev = $("#homePrev");
+  const to = $(here ? "#view-panel .home-split" : "#view-home .home-split");
+  if (prev.parentNode !== to) to.appendChild(prev);
+  $(".pe-preview").hidden = here;
+}
+function setPeTab(v) {
+  peTab = v;
+  for (const x of $$("#peTabs button")) x.classList.toggle("on", x.dataset.v === v);
+  for (const p of $$(".pe-panels")) p.hidden = v !== "panels";
+  for (const p of $$(".pe-gestures")) p.hidden = v !== "gestures";
+  for (const p of $$(".pe-prof")) p.hidden = v !== "panels" && v !== "gestures";
+  for (const p of $$(".pe-mask")) p.hidden = v !== "mask";
+  for (const p of $$(".pe-trace")) p.hidden = v !== "trace";
+  placePreview();
+  requestAnimationFrame(() => { Scr.draw(); Panel.sig = ""; if (S) Panel.render(); });
+}
+for (const b of $$("#peTabs button")) b.onclick = () => setPeTab(b.dataset.v);
 for (const b of $$("#viewTogs button")) b.onclick = () => setKey(b.dataset.flag, S.cfg[b.dataset.flag] === false).then(refresh);
 $("#sbPen").onchange = e => { S.output = e.target.checked; render(); api().set_output(S.output); };
-for (const seg of $$(".maskSide")) {  // the mask strip's side, or off (mask_side + mask_panel)
+// a panel's side, or off: the mask panel (mask_side + mask_panel), the tracing image panel
+const SIDE_SEGS = [[".maskSide", "mask_panel", "mask_side"], [".traceSide", "trace_panel", "trace_side"]];
+for (const [cls, flag, side] of SIDE_SEGS) for (const seg of $$(cls)) {
   seg.addEventListener("click", async e => {
     const b = e.target.closest("button");
     if (!b) return;
-    if (b.dataset.v === "off") await setKey("mask_panel", false);
-    else { await setKey("mask_side", b.dataset.v); await setKey("mask_panel", true); }
+    if (b.dataset.v === "off") await setKey(flag, false);
+    else { await setKey(side, b.dataset.v); await setKey(flag, true); }
     refresh();
   });
 }
@@ -331,6 +346,7 @@ function go(v) {
   view = v;
   for (const n of $$(".nav[data-view]")) n.classList.toggle("on", n.dataset.view === v);
   for (const s of $$(".view")) s.classList.toggle("on", s.id === "view-" + v);
+  placePreview();
   requestAnimationFrame(() => { drawStatic(); drawCurve(); Scr.draw(); Panel.sig = ""; if (S) Panel.render(); });
 }
 for (const n of $$(".nav[data-view]")) n.onclick = () => go(n.dataset.view);
@@ -1157,9 +1173,9 @@ const Wizard = {
         <div class="pane-title mt2">Where things are</div>
         <ol class="steps">
           <li><div><b>Title bar</b>: two lights for the tablet and the pen, and buttons that turn the pen in ${OSDESK()}, the tablet screen and shapes on and off.</div></li>
-          <li><div><b>Home</b>: the tablet screen as it will look, with paper, a tracing image and pen masks.</div></li>
+          <li><div><b>Home</b>: the tablet screen as it will look, with its paper, shapes and ink trail.</div></li>
           <li><div><b>Calibrate</b>: calibrate again, and choose the display and the part of the tablet you draw on.</div></li>
-          <li><div><b>Pen feel</b> for pressure, and <b>Panel &amp; gestures</b> for the shortcut buttons on the tablet.</div></li>
+          <li><div><b>Pen feel</b> for pressure, and <b>Panel &amp; gestures</b> for the tablet's three panels (shortcut buttons, pen masks, tracing images) and finger gestures.</div></li>
         </ol>
         <div class="note mt"><svg><use href="#i-info"/></svg><div>${LINUX() ? "Krita, GIMP, Inkscape and Xournal++ get pressure and tilt through their normal tablet support. On Wayland, if Krita ignores the pen, start it with <code>QT_QPA_PLATFORM=xcb krita</code>." : "Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input."}</div></div>`;
     }
@@ -1556,17 +1572,15 @@ const Panel = {
       <path d="M28 0L2 18L28 36Z" fill="#000"/></svg>`;
     const panel = `<div class="pm-panel" style="width:${px(W)};height:${px(vh)};${right ? "right:0" : "left:0"}">
         <div class="pm-edge" style="${right ? "left:0" : "right:0"};width:${px(3)}"></div>
-        <div class="pm-head" style="left:${px(right ? 22 : T + 14)};top:${px(24)};font-size:${px(36)}">ReDrawable</div>
         ${this.profRow(px, W, T)}
         ${cells}
         ${main && S.cfg.gestures !== false ? `<div class="pm-gbtn" title="On the tablet this opens a list of the finger gestures; see Tap gestures here"
           style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">Finger gestures</div>` : ""}
         ${main && lightShown() ? this.lightRow(px, W, vh) : ""}
       </div>`;
-    const tab = `<div class="pm-tab" title="Folds the panel away" style="${right ? "right:0" : "left:0"};width:${px(T)};height:${px(T)};border-width:${px(3)}">${chev}</div>`;
     const ov = $(".pm-ov", wrap);
     Object.assign(ov.style, { left: g.ox + "px", top: g.oy + "px", width: vw * k + "px", height: vh * k + "px" });
-    ov.innerHTML = `${open && here ? panel : ""}${here ? tab : ""}`;
+    ov.innerHTML = open && here ? panel : "";
     Duck.draw();
     $("#pmNote").textContent = !here ? `${this.side === "right" ? "Right" : "Left"} panel off` :
       open ? `${vw} × ${vh} px, panel ${W} wide` : "Panel folded";
@@ -1587,8 +1601,6 @@ const Panel = {
         this.save();
       };
     }
-    const t = $(".pm-tab", wrap);
-    if (t) t.onclick = () => setKey(right ? "panel_open_right" : "panel_open", !open).then(refresh);
   },
 
   fill(force) {
@@ -1758,30 +1770,30 @@ Panel.init();
 // the page as set even with no tablet connected. Drag the tracing image or the mask to place it.
 const Scr = {
   HEAD: 190, ROWS: 8, PROF_Y: 94, PROF_H: 72,
-  img: null, imgKey: null, thumbs: {}, thumbSig: null,
+  img: null, imgKey: null, thumbs: {}, thumbSig: null, tthumbs: {}, tthumbSig: null, thumbMade: null,
   drag: "trace", live: null,  // live = {x, y, s}: the tracing image while it is dragged or zoomed
   sheet: false,               // showing the gestures sheet (click Finger gestures in the picture)
   F: '"Noto Sans", "Segoe UI", system-ui, sans-serif',
 
-  layout() {  // as companion_qml.cpp: a panel on either side or both, the strip inside the one on its side
+  layout() {  // as companion_qml.cpp: a side's panels (shortcuts, mask, tracing image) share its corner and its place
     const [VW, VH] = S.view, c = S.cfg, cal = !!S.calibrating, P = S.panel_px, T = S.tab_px;
     const onL = !cal && (c.panel === "left" || c.panel === "both"), onR = !cal && (c.panel === "right" || c.panel === "both");
-    // Button: Finger only: the panels keep nothing from the pen, it draws through them
-    const hides = c.panel_show === "tap";
     const openL = c.panel_open !== false, openR = c.panel_open_right !== false;
-    const wL = onL && openL ? P : 0, wR = onR && openR ? P : 0;
-    const stripSide = c.mask_side === "left" ? "left" : "right";
-    const stripAvail = !cal && c.mask_panel !== false && (c.masks || []).length > 0;
-    const stripW = stripAvail && c.mask_strip_open ? S.strip_px : 0;
-    const stripOff = stripSide === "left" ? (onL ? (openL ? P : T) : 0) : (onR ? (openR ? P : T) : 0);
-    const sOwn = stripW && c.mask_show !== "tap";  // Finger only: the strip keeps nothing from the pen
-    const resL = stripSide === "left" && sOwn ? stripOff + stripW : hides ? 0 : wL;
-    const resR = stripSide === "right" && sOwn ? stripOff + stripW : hides ? 0 : wR;
-    return { VW, VH, T, P, cal, hides, onL, onR, openL, openR, wL, wR, panelOn: onL || onR,
-             main: onL ? "left" : onR ? "right" : "", stripSide, stripAvail, stripW, stripOff,
-             stripX: stripSide === "right" ? VW - stripOff - stripW : stripOff,
-             stripTabX: stripSide === "right" ? VW - stripOff - T : stripOff,
-             resL, resR, paperX: resL, paperW: VW - resL - resR };
+    const maskOn = !cal && c.mask_panel !== false && (c.masks || []).length > 0, maskSide = c.mask_side === "left" ? "left" : "right";
+    const traceOn = !cal && c.trace_panel !== false && (c.traces || []).length > 0, traceSide = c.trace_side === "left" ? "left" : "right";
+    const show = { keys: c.panel_show || "always", mask: c.mask_show || "always", trace: c.trace_show || "always" };
+    const isOpen = (k, s) => k === "keys" ? (s === "left" ? openL : openR) : k === "mask" ? !!c.mask_strip_open : !!c.trace_strip_open;
+    const side = s => {
+      const kinds = [(s === "left" ? onL : onR) && "keys", maskOn && maskSide === s && "mask", traceOn && traceSide === s && "trace"].filter(Boolean);
+      const open = kinds.find(k => isOpen(k, s)) || "";
+      // Button: Finger only: the panel keeps nothing from the pen, it draws through
+      return { kinds, open, res: open && show[open] !== "tap" ? P : 0 };
+    };
+    const sides = { left: side("left"), right: side("right") };
+    return { VW, VH, T, P, cal, onL, onR, openL, openR, sides, show, panelOn: onL || onR,
+             wL: sides.left.open === "keys" ? P : 0, wR: sides.right.open === "keys" ? P : 0,
+             main: onL ? "left" : onR ? "right" : "",
+             resL: sides.left.res, resR: sides.right.res, paperX: sides.left.res, paperW: VW - sides.left.res - sides.right.res };
   },
   area(L) {  // core.effective_area: the panels and the open strip keep the pen out
     const a = [...S.cfg.area];
@@ -1803,6 +1815,27 @@ const Scr = {
         im.onload = () => { if (this.imgKey === key) { this.img = im; this.draw(); if (view === "panel") Panel.draw(); } };
         im.src = url;
       });
+    }
+    const tv = S.trace_thumb_vers || {}, tsig = JSON.stringify(tv);
+    if (tsig !== this.tthumbSig) {
+      this.tthumbSig = tsig;
+      if (Object.values(tv).some(Boolean)) api().trace_thumbs().then(m => {
+        for (const [id, url] of Object.entries(m || {})) {
+          const im = new Image();
+          im.onload = () => { this.tthumbs[id] = im; this.draw(); if (view === "panel") Panel.draw(); };
+          im.src = url;
+        }
+      });
+    }
+    // the shown image has no thumbnail for the tablet's panel yet: draw one here and hand it over
+    const ta = S.cfg.trace_active;
+    if (ta && this.img && tv[ta] === 0 && this.thumbMade !== ta + "|" + this.imgKey) {
+      this.thumbMade = ta + "|" + this.imgKey;
+      const f = Math.min(1, 266 / Math.max(this.img.width, this.img.height)), cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.round(this.img.width * f)); cv.height = Math.max(1, Math.round(this.img.height * f));
+      const x = cv.getContext("2d");
+      x.fillStyle = "#fff"; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(this.img, 0, 0, cv.width, cv.height);
+      api().set_trace_thumb(ta, cv.toDataURL("image/png")).then(refresh);
     }
     const sig = JSON.stringify(S.mask_vers || {});
     if (sig !== this.thumbSig && (S.cfg.masks || []).length) {
@@ -1900,13 +1933,12 @@ const Scr = {
     ctx.strokeStyle = "#000"; ctx.lineWidth = Math.max(2, hair);
     ctx.strokeRect(a[0] * L.VW + 1, a[1] * L.VH + 1, (a[2] - a[0]) * L.VW - 2, (a[3] - a[1]) * L.VH - 2);
     if (this.sheet) this.gestureSheet(ctx, L);
-    if (L.stripW) this.strip(ctx, L);
     for (const side of ["left", "right"]) {
-      if (side === "left" ? L.wL : L.wR) this.panel(ctx, L, side);
+      const open = L.sides[side].open;
+      if (open === "keys") this.panel(ctx, L, side);
+      else if (open) this.listPanel(ctx, L, side, open);
+      this.tabs(ctx, L, side);
     }
-    if (L.stripAvail) this.stripTab(ctx, L);
-    if (L.onL) this.foldTab(ctx, L, "left");
-    if (L.onR) this.foldTab(ctx, L, "right");
     if (!L.panelOn) {
       ctx.fillStyle = "#000"; ctx.font = `26px ${this.F}`; ctx.textBaseline = "top";
       ctx.fillText("Connected to PC    (power button: back to notebooks)", 30 + L.paperX, 20);
@@ -1979,9 +2011,6 @@ const Scr = {
     ctx.translate(right ? L.VW - W : 0, 0);
     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, VH);
     ctx.fillStyle = "#000"; ctx.fillRect(right ? 0 : W - 3, 0, 3, VH);
-    ctx.font = `600 36px "EB Garamond", Georgia, serif`; ctx.textBaseline = "top";
-    ctx.fillText("ReDrawable", right ? 22 : T + 14, 24);
-    ctx.textBaseline = "alphabetic";
     // profile row: < name >
     const profs = c.panel_profiles || [], many = profs.length > 1, name = (profs[c.panel_profile] || {}).name || "";
     this.box(ctx, 16, this.PROF_Y, W - 32, this.PROF_H, 14, "#fff");
@@ -2038,59 +2067,73 @@ const Scr = {
     ctx.textBaseline = "alphabetic";
   },
 
-  strip(ctx, L) {
-    const c = S.cfg, W = L.stripW, VW = L.VW, VH = L.VH, T = L.T, right = L.stripSide === "right";
-    const thumbH = (W - 24) * VH / VW, tileH = thumbH + 46, invert = !!c.mask_invert, active = c.mask_active || "";
+  // the open mask or tracing image panel: two buttons, the pictures two across, the paper under the masks
+  listGeo(L, kind) {
+    const tw = (L.P - 36) / 2, thumbH = tw * L.VH / L.VW, tileH = thumbH + 46, paperY = L.VH - 24 - 110;
+    return { tw, thumbH, tileH, paperY, top: 180, bottom: kind === "mask" ? paperY - 10 : L.VH - 10 };
+  },
+  listPanel(ctx, L, side, kind) {
+    const c = S.cfg, W = L.P, VH = L.VH, right = side === "right", isMask = kind === "mask", g = this.listGeo(L, kind);
+    const list = (isMask ? c.masks : c.traces) || [], active = (isMask ? c.mask_active : c.trace_active) || "";
+    const first = isMask ? !!c.mask_invert : !!c.trace_adjust;
     ctx.save();
-    ctx.translate(L.stripX, 0);
+    ctx.translate(right ? L.VW - W : 0, 0);
     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, VH);
     ctx.fillStyle = "#000"; ctx.fillRect(right ? 0 : W - 3, 0, 3, VH);
-    ctx.font = `bold 20px ${this.F}`; ctx.letterSpacing = "3px";
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
-    ctx.fillText("MASKS", (right ? 0 : T) + (W - T) / 2, 28);
-    ctx.letterSpacing = "0px"; ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
-    this.box(ctx, 12, 96, W - 24, 70, 12, invert ? "#000" : "#fff");
-    this.text(ctx, "Invert", W / 2, 131, W - 40, 24, 24, true, invert ? "#fff" : "#000");
-    this.box(ctx, 12, 176, W - 24, 70, 12, !active ? "#000" : "#fff");
-    this.text(ctx, "None", W / 2, 211, W - 40, 24, 24, true, !active ? "#fff" : "#000");
-    const paperY = VH - 24 - 110;
-    (c.masks || []).forEach((m, i) => {
-      const y = 256 + i * (tileH + 10), on = m.id === active;
-      if (y + tileH > paperY - 10) return;
-      ctx.fillStyle = "#fff"; ctx.fillRect(12, y, W - 24, thumbH);
+    this.box(ctx, 12, 96, g.tw, 70, 12, first ? "#000" : "#fff");
+    this.text(ctx, isMask ? "Invert" : "Move", 12 + g.tw / 2, 131, g.tw - 16, 24, 16, true, first ? "#fff" : "#000");
+    this.box(ctx, 24 + g.tw, 96, g.tw, 70, 12, !active ? "#000" : "#fff");
+    this.text(ctx, "None", 24 + g.tw * 1.5, 131, g.tw - 16, 24, 16, true, !active ? "#fff" : "#000");
+    list.forEach((m, i) => {
+      const x = 12 + (i % 2) * (g.tw + 12), y = g.top + Math.floor(i / 2) * (g.tileH + 10), on = m.id === active;
+      if (y + g.tileH > g.bottom) return;
+      ctx.fillStyle = "#fff"; ctx.fillRect(x, y, g.tw, g.thumbH);
       const bw = on ? 7 : 2;
-      ctx.strokeStyle = "#000"; ctx.lineWidth = bw; ctx.strokeRect(12 + bw / 2, y + bw / 2, W - 24 - bw, thumbH - bw);
-      const th = this.thumbs[m.id];
-      if (th) ctx.drawImage(th, 16, y + 4, W - 32, thumbH - 8);
-      ctx.fillStyle = on ? "#000" : "#fff"; roundRect(ctx, 12, y + thumbH + 4, W - 24, 38, 8); ctx.fill();
-      this.text(ctx, m.name, W / 2, y + thumbH + 23, W - 24, 21, 21, true, on ? "#fff" : "#000");
+      ctx.strokeStyle = "#000"; ctx.lineWidth = bw; ctx.strokeRect(x + bw / 2, y + bw / 2, g.tw - bw, g.thumbH - bw);
+      const th = (isMask ? this.thumbs : this.tthumbs)[m.id];
+      if (th && isMask) ctx.drawImage(th, x + 4, y + 4, g.tw - 8, g.thumbH - 8);
+      else if (th) {  // Image.PreserveAspectFit
+        const f = Math.min((g.tw - 8) / th.width, (g.thumbH - 8) / th.height), iw = th.width * f, ih = th.height * f;
+        ctx.drawImage(th, x + (g.tw - iw) / 2, y + (g.thumbH - ih) / 2, iw, ih);
+      }
+      ctx.fillStyle = on ? "#000" : "#fff"; roundRect(ctx, x, y + g.thumbH + 4, g.tw, 38, 8); ctx.fill();
+      let name = m.name;  // Text.ElideRight
+      ctx.font = `bold 20px ${this.F}`;
+      while (name.length > 1 && ctx.measureText(name).width > g.tw - 8) name = name.slice(0, -2) + "…";
+      this.text(ctx, name, x + g.tw / 2, y + g.thumbH + 23, g.tw - 8, 20, 20, true, on ? "#fff" : "#000");
     });
-    // the paper selector at its foot, as the tablet draws it
-    const names = { plain: "Plain", lined: "Lined", squared: "Squared", dots: "Dots", cross: "Crosses", blueprint: "Blueprint", isometric: "Isometric" };
-    this.box(ctx, 12, paperY, W - 24, 110, 12, "#fff");
-    ctx.font = `bold 17px ${this.F}`; ctx.letterSpacing = "2px"; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillStyle = "#000";
-    ctx.fillText("PAPER", W / 2, paperY + 12);
-    ctx.letterSpacing = "0px"; ctx.font = `26px ${this.F}`;
-    ctx.textAlign = "start"; ctx.fillText("\u25C0", 22, paperY + 48);
-    ctx.textAlign = "end"; ctx.fillText("\u25B6", W - 22, paperY + 48);
-    ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
-    this.text(ctx, names[c.paper] || c.paper, W / 2, paperY + 66, W - 104, 23, 14, true, "#000");
+    if (isMask) {  // the paper selector at its foot, as the tablet draws it
+      const names = { plain: "Plain", lined: "Lined", squared: "Squared", dots: "Dots", cross: "Crosses", blueprint: "Blueprint", isometric: "Isometric" };
+      const paperY = g.paperY;
+      this.box(ctx, 12, paperY, W - 24, 110, 12, "#fff");
+      ctx.font = `bold 17px ${this.F}`; ctx.letterSpacing = "2px"; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillStyle = "#000";
+      ctx.fillText("PAPER", W / 2, paperY + 12);
+      ctx.letterSpacing = "0px"; ctx.font = `26px ${this.F}`;
+      ctx.textAlign = "start"; ctx.fillText("◀", 22, paperY + 48);
+      ctx.textAlign = "end"; ctx.fillText("▶", W - 22, paperY + 48);
+      ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
+      this.text(ctx, names[c.paper] || c.paper, W / 2, paperY + 66, W - 104, 23, 14, true, "#000");
+    }
     ctx.restore();
   },
-  stripTab(ctx, L) {  // a half-shaded square in the corner away from the panel
-    const T = L.T, x = L.stripTabX, open = !!S.cfg.mask_strip_open;
-    ctx.fillStyle = open ? "#000" : "#fff"; ctx.fillRect(x, 0, T, T);
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.strokeRect(x + 1.5, 1.5, T - 3, T - 3);
-    const fg = open ? "#fff" : "#000", q = x + (T - 38) / 2, r = (T - 38) / 2;
-    ctx.strokeStyle = fg; ctx.strokeRect(q + 1.5, r + 1.5, 35, 35);
-    ctx.fillStyle = fg; ctx.fillRect(q + 3, r + 3, 16, 32);
-  },
-  foldTab(ctx, L, side) {  // a solid triangle pointing the way the panel will move
-    const right = side === "right", T = L.T, x = right ? L.VW - T : 0, open = right ? L.openR : L.openL;
-    ctx.fillStyle = "#fff"; ctx.fillRect(x, 0, T, T);
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.strokeRect(x + 1.5, 1.5, T - 3, T - 3);
-    ctx.fillStyle = "#000";
-    this.triangle(ctx, x + T / 2, T / 2, 26, 36, right !== open);
+  tabX(L, side, i) { return side === "right" ? L.VW - (i + 1) * L.T : i * L.T; },
+  // a side's corner tabs, one per kind of panel there, black while its panel is open
+  tabs(ctx, L, side) {
+    const T = L.T, sd = L.sides[side];
+    sd.kinds.forEach((kind, i) => {
+      const x = this.tabX(L, side, i), on = sd.open === kind, fg = on ? "#fff" : "#000", cx = x + T / 2, cy = T / 2;
+      this.box(ctx, x + 6, 6, T - 12, T - 12, 26, on ? "#000" : "#fff");
+      ctx.fillStyle = fg; ctx.strokeStyle = fg; ctx.lineWidth = 3;
+      if (kind === "keys") {
+        for (let k = 0; k < 4; k++) { roundRect(ctx, cx - 17 + (k % 2) * 20, cy - 17 + Math.floor(k / 2) * 20, 14, 14, 3); ctx.fill(); }
+      } else if (kind === "mask") {
+        ctx.strokeRect(cx - 17.5, cy - 17.5, 35, 35); ctx.fillRect(cx - 16, cy - 16, 16, 32);
+      } else {
+        ctx.strokeRect(cx - 20.5, cy - 15.5, 41, 31);
+        ctx.beginPath(); ctx.moveTo(cx - 15, cy + 11); ctx.lineTo(cx - 3, cy - 5); ctx.lineTo(cx + 9, cy + 11); ctx.closePath(); ctx.fill();
+        ctx.fillRect(cx + 8, cy - 10, 7, 7);
+      }
+    });
   },
 
   targets(ctx, L) {  // calibrating: 9 crosshairs, 10% in, the next one ringed
@@ -2194,25 +2237,27 @@ const Scr = {
     if (!L || !c || L.cal || x < 0 || y < 0 || x >= L.VW || y >= L.VH) return null;
     const act = a => () => api().tablet_action(a).then(refresh);
     const T = L.T, P = L.P;
-    // the corner tabs: a panel's fold tab, the mask strip's tab
+    // the corner tabs, then an open mask or tracing image panel: its two buttons, a picture, the paper
     for (const side of ["left", "right"]) {
-      const on = side === "left" ? L.onL : L.onR, open = side === "left" ? L.openL : L.openR;
-      const tx = side === "right" ? L.VW - T : 0;
-      if (on && y < T && x >= tx && x < tx + T) return act(`panel ${side} ${open ? 0 : 1}`);
-    }
-    if (L.stripAvail && y < T && x >= L.stripTabX && x < L.stripTabX + T) return act(`maskstrip ${c.mask_strip_open ? 0 : 1}`);
-    // the open mask strip: Invert, None, a mask, the paper
-    if (L.stripW && x >= L.stripX && x < L.stripX + L.stripW) {
-      const W = L.stripW, sx = x - L.stripX, paperY = L.VH - 24 - 110;
-      if (y >= 96 && y < 166) return act("maskinvert");
-      if (y >= 176 && y < 246) return act("maskpick none");
-      if (y >= paperY && y < paperY + 110) {
-        const k = Math.max(0, PAPERS.indexOf(c.paper)), n = PAPERS.length;
-        return act("paper " + PAPERS[(k + (sx < W / 2 ? n - 1 : 1)) % n]);
+      const sd = L.sides[side], dx = side === "right" ? L.VW - x : x, slot = Math.floor(dx / T);
+      if (y < T && slot < sd.kinds.length) {
+        const kind = sd.kinds[slot], open = sd.open === kind ? 0 : 1;
+        return act(kind === "keys" ? `panel ${side} ${open}` : kind === "mask" ? `maskstrip ${open}` : `tracestrip ${open}`);
       }
-      const thumbH = (W - 24) * L.VH / L.VW, tileH = thumbH + 46, i = Math.floor((y - 256) / (tileH + 10));
-      const m = (c.masks || [])[i];
-      if (m && y >= 256 && y - 256 - i * (tileH + 10) < tileH && 256 + i * (tileH + 10) + tileH <= paperY - 10) return act("maskpick " + m.id);
+      if (!sd.open || sd.open === "keys" || dx >= P) continue;
+      const kind = sd.open, isMask = kind === "mask", g = this.listGeo(L, kind);
+      const px = side === "right" ? x - (L.VW - P) : x, second = px >= P / 2;
+      if (y >= 96 && y < 166) {
+        if (second) return act(isMask ? "maskpick none" : "tracepick none");
+        return isMask ? act("maskinvert") : c.trace_active ? act("traceadjust") : null;
+      }
+      if (isMask && y >= g.paperY && y < g.paperY + 110) {
+        const k = Math.max(0, PAPERS.indexOf(c.paper)), n = PAPERS.length;
+        return act("paper " + PAPERS[(k + (second ? 1 : n - 1)) % n]);
+      }
+      const row = Math.floor((y - g.top) / (g.tileH + 10)), m = ((isMask ? c.masks : c.traces) || [])[row * 2 + (second ? 1 : 0)];
+      if (m && y >= g.top && y - g.top - row * (g.tileH + 10) < g.tileH && g.top + row * (g.tileH + 10) + g.tileH <= g.bottom)
+        return act((isMask ? "maskpick " : "tracepick ") + m.id);
       return null;
     }
     // an open panel: the profile arrows, its buttons, the light bar
@@ -2270,11 +2315,30 @@ Scr.init();
 async function pickTrace() {
   const path = await api().pick_trace_image();
   if (path) {
-    await resetTrace(); await setKey("trace_adjust", true); Scr.setDrag("trace");
-    toast("Image sent. Drag it with one finger, pinch to zoom, then tap the black note on the tablet when done.");
+    Scr.setDrag("trace");
+    toast("Image added. Drag it on the picture, or use Move on the tablet.");
   }
   refresh();
 }
+async function delTrace() {
+  if (S.cfg.trace_active) await api().delete_trace(S.cfg.trace_active);
+  refresh();
+}
+function renderTraces() {
+  const ts = S.cfg.traces || [], cur = S.cfg.trace_active || "", sel = $("#traceSel"), nm = $("#traceNm");
+  const sig = JSON.stringify(ts.map(t => [t.id, t.name]));
+  if (sel.dataset.sig !== sig) {
+    sel.dataset.sig = sig;
+    sel.innerHTML = `<option value="">None</option>` + ts.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
+  }
+  if (document.activeElement !== sel) sel.value = cur;
+  const t = ts.find(x => x.id === cur);
+  if (document.activeElement !== nm) nm.value = t ? t.name : "";
+  nm.disabled = !t; nm.dataset.tip = t ? t.file : "";
+  $("#traceDel").disabled = !t;
+}
+$("#traceSel").onchange = e => api().pick_trace(e.target.value).then(refresh);
+$("#traceNm").onchange = e => { if (S.cfg.trace_active && e.target.value.trim()) api().rename_trace(S.cfg.trace_active, e.target.value).then(refresh); };
 async function resetTrace() {
   for (const [k, v] of [["trace_x", 0], ["trace_y", 0], ["trace_scale", 1]]) await setKey(k, v);
   refresh();

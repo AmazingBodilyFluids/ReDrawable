@@ -1,4 +1,5 @@
 import collections
+import json
 """Panel buttons, key combinations and tablet actions (no Windows, no tablet needed)."""
 import threading
 import time
@@ -255,6 +256,81 @@ class Profiles(unittest.TestCase):
             for side in ("buttons", "buttons_right"):
                 self.assertEqual(len(p[side]), core.PANEL_SLOTS)
                 self.assertEqual(core.clean_buttons(p[side]), p[side], p["name"])  # no key dropped, no title cut
+
+
+class OnePanelOpen(Profiles):
+    def test_opening_one_kind_folds_the_others(self):
+        e = self.engine({"panel": "both", "panel_open": True, "panel_open_right": True})
+        e.set("mask_strip_open", True)
+        self.assertEqual([e.cfg[k] for k in core.OPEN_KEYS], [False, False, True, False])
+        e.tablet_action("tracestrip 1")
+        self.assertEqual([e.cfg[k] for k in core.OPEN_KEYS], [False, False, False, True])
+        e.tablet_action("panel left 1")
+        e.tablet_action("panel right 1")                     # the two shortcut panels are one kind
+        self.assertEqual([e.cfg[k] for k in core.OPEN_KEYS], [True, True, False, False])
+        e.set("panel_open", False)                           # folding folds nothing else
+        self.assertEqual([e.cfg[k] for k in core.OPEN_KEYS], [False, True, False, False])
+
+    def test_old_settings_with_two_open_keep_the_shortcuts(self):
+        e = self.engine({"panel_open": True, "mask_strip_open": True, "trace_strip_open": True})
+        e.one_open()
+        self.assertEqual([e.cfg[k] for k in core.OPEN_KEYS], [True, True, False, False])
+
+
+class TraceLibrary(Profiles):
+    def engine(self, cfg=None):
+        e = super().engine(cfg)
+        e.changed = lambda: None
+        e.companion.tab = None
+        e.trace_thumb_path = lambda tid: os.path.join(self.tmp, f"trace-{tid}-thumb.png")
+        e.load_traces()
+        return e
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def test_the_old_single_image_is_carried_over(self):
+        e = self.engine({"trace_file": "/pics/Hand study.png", "trace_opacity": 0.8, "trace_x": 12.0})
+        self.assertEqual(e.cfg["traces"], [{"id": "t1", "name": "Hand study", "file": "/pics/Hand study.png",
+                                            "opacity": 0.8, "scale": 1.0, "x": 12.0, "y": 0.0}])
+        self.assertEqual((e.cfg["trace_active"], e.cfg["trace_file"]), ("t1", "/pics/Hand study.png"))
+
+    def test_each_image_keeps_its_own_place(self):
+        e = self.engine()
+        a = e.add_trace("/pics/a.png")
+        e.tablet_action("trace 100 -20 2")                   # moved on the tablet
+        e.set("trace_opacity", 0.9)
+        b = e.add_trace("/pics/b.jpg", "Second")
+        self.assertEqual((e.cfg["trace_active"], e.cfg["trace_file"], e.cfg["trace_x"], e.cfg["trace_scale"]), (b, "/pics/b.jpg", 0.0, 1.0))
+        e.tablet_action("tracepick " + a)                    # picked in the tablet's panel, which folds
+        self.assertEqual((e.cfg["trace_file"], e.cfg["trace_x"], e.cfg["trace_y"], e.cfg["trace_scale"], e.cfg["trace_opacity"]),
+                         ("/pics/a.png", 100.0, -20.0, 2.0, 0.9))
+        self.assertFalse(e.cfg["trace_strip_open"])
+        e.tablet_action("tracepick none")
+        self.assertEqual((e.cfg["trace_active"], e.cfg["trace_file"]), ("", ""))
+        e.delete_trace(a)
+        self.assertEqual([t["name"] for t in e.cfg["traces"]], ["Second"])
+
+    def test_thumbnail_is_kept_and_listed_for_the_tablet(self):
+        e = self.engine()
+        a = e.add_trace("/pics/a.png")
+        self.assertEqual(e.trace_thumb_vers(), {a: 0})
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 40
+        e.set_trace_thumb(a, "data:image/png;base64," + base64.b64encode(png).decode())
+        self.assertTrue(e.trace_thumb_vers()[a])
+        self.assertEqual(base64.b64decode(e.trace_thumbs()[a].split(",")[1]), png)
+        e.set_trace_thumb(a, "data:image/png;base64," + base64.b64encode(b"not a png").decode())   # refused
+        self.assertEqual(base64.b64decode(e.trace_thumbs()[a].split(",")[1]), png)
+        e.companion.tab = types.SimpleNamespace(run=lambda cmd, data=None: e.companion.lines.append("RUN " + cmd.split(";")[-1].strip()))
+        e.companion.REMOTE, e.companion.tthumb_sent = "/r", {}
+        e.cfg["trace_side"] = "left"
+        e.push_tstrip()
+        self.assertEqual(e.companion.lines[-3], "tracestrip 1 left 0")
+        self.assertTrue(e.companion.lines[-2].startswith(f"RUN cat > /r/tthumb-{a}-"))
+        got = json.loads(e.companion.lines[-1].split(" ", 1)[1])
+        self.assertEqual((got["active"], got["list"][0]["name"]), (a, "a"))
+        self.assertTrue(got["list"][0]["thumb"].startswith(f"/r/tthumb-{a}-"))
 
 
 class PaperAndTrace(Profiles):
@@ -523,8 +599,8 @@ class PanelGeometry(unittest.TestCase):
 
     def test_mask_button_modes(self):
         e = self.engine(panel="off", mask_side="right", masks=[{"id": "a"}], mask_strip_open=False, mask_show="hover")
-        self.assertFalse(e.over_panel(self.pen(0.99, 0.02)))   # folded strip's tab hidden: draw there
-        e.tablet_action("peek 0 0 1")
+        self.assertFalse(e.over_panel(self.pen(0.99, 0.02)))   # folded panel's tab hidden: draw there
+        e.tablet_action("peek 0 1")
         self.assertTrue(e.over_panel(self.pen(0.99, 0.02)))
         e.cfg.update(mask_show="tap", mask_strip_open=True)
         self.assertEqual(e.strip_frac(), 0)
@@ -553,19 +629,34 @@ class PanelGeometry(unittest.TestCase):
         self.assertTrue(e.over_panel(self.pen(0.99, 0.02)))      # right, folded: its tab
         self.assertFalse(e.over_panel(self.pen(0.99, 0.5)))
 
-    def test_mask_strip_sits_inside_a_panel_on_its_side(self):
-        e = self.engine(panel="both", panel_open=True, panel_open_right=True, mask_side="right",
-                        masks=[{"id": "a"}], mask_strip_open=True)
-        w, P, M = 2160, core.PANEL_PX, core.STRIP_PX
-        self.assertEqual(e.strip_offset(), P)
-        self.assertAlmostEqual(e.effective_area()[2], 1 - (P + M) / w)
-        self.assertTrue(e.over_panel(self.pen(1 - (P + M / 2) / w, 0.5)))   # in the strip
-        e.cfg["panel_open_right"] = False                                   # folded: past its tab
-        self.assertEqual(e.strip_offset(), core.TAB_PX)
-        e.cfg["mask_strip_open"] = False                                    # strip folded: only its tab
-        x = 1 - (core.TAB_PX + core.TAB_PX / 2) / w
+    def test_a_sides_panels_share_its_corner_and_place(self):
+        tr = [{"id": "t1", "name": "A", "file": "a.png"}]
+        e = self.engine(panel="right", panel_open_right=False, mask_side="right", masks=[{"id": "a"}],
+                        trace_side="right", traces=tr, mask_strip_open=True)
+        w, P, T = 2160, core.PANEL_PX, core.TAB_PX
+        self.assertEqual(e.side_kinds("right"), ["keys", "mask", "trace"])   # tabs in this order from the corner
+        self.assertEqual(e.side_kinds("left"), [])
+        self.assertEqual(e.open_kind("right"), "mask")
+        self.assertAlmostEqual(e.effective_area()[2], 1 - P / w)             # the mask panel is as wide as the shortcuts'
+        self.assertTrue(e.over_panel(self.pen(1 - P / 2 / w, 0.5)))
+        e.cfg["mask_strip_open"] = False                                     # all folded: three tabs, nothing below
+        self.assertEqual(e.effective_area()[2], 1.0)
+        for i in range(3):
+            self.assertTrue(e.over_panel(self.pen(1 - (i + 0.5) * T / w, 0.01)), i)
+        self.assertFalse(e.over_panel(self.pen(1 - 3.5 * T / w, 0.01)))
+        self.assertFalse(e.over_panel(self.pen(1 - T / 2 / w, 0.5)))
+        e.cfg.update(trace_side="left")                                      # each kind sits on its own side
+        self.assertEqual((e.side_kinds("left"), e.side_kinds("right")), (["trace"], ["keys", "mask"]))
+        self.assertTrue(e.over_panel(self.pen(T / 2 / w, 0.01)))
+
+    def test_a_hover_tab_shows_while_another_panel_on_its_side_is_open(self):
+        e = self.engine(panel="left", panel_open=True, mask_side="left", masks=[{"id": "a"}], mask_show="hover")
+        x = 1.5 * core.TAB_PX / 2160
+        self.assertTrue(e.over_panel(self.pen(x, 0.01)))     # in the open shortcut panel's tab row
+        e.cfg.update(panel_open=False)
+        self.assertFalse(e.over_panel(self.pen(x, 0.01)))    # all folded: hidden until the pen hovers
+        e.tablet_action("peek 1 0")
         self.assertTrue(e.over_panel(self.pen(x, 0.01)))
-        self.assertFalse(e.over_panel(self.pen(x, 0.5)))
 
     def test_profiles_carry_both_panels(self):
         profs = core.clean_profiles([{"name": "Old", "buttons": core.DEFAULT_BUTTONS}])

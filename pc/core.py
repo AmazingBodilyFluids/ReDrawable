@@ -15,6 +15,7 @@ import dataclasses
 import json
 import math
 import os
+import re
 import socket
 import sys
 import threading
@@ -86,13 +87,22 @@ DEFAULTS = {
     "view_pressure": True, "view_tilt": True, "view_hover": True,
     "mask_side": "right",      # which side of the tablet the strip is on, inside a panel on that side
     "mask_strip_open": False,  # the strip folds away to a corner tab; picking a mask folds it again
+    # the tracing images: [{"id", "name", "file", "opacity", "scale", "x", "y"}]; the active one is what the
+    # tablet shows (trace_file / trace_opacity / trace_scale / trace_x / trace_y mirror it). The tablet
+    # picks between them in a panel of its own, like the masks'
+    "traces": None, "trace_active": "", "trace_panel": True, "trace_side": "right",
+    "trace_strip_open": False, "trace_show": "always",
     "swipe_step": 100,      # three-finger swipe: tablet pixels of drag per undo / redo step (~11 mm)
     "rotate_keys": "r",     # five-finger twist: key held while dragging in a circle (Photoshop R; Krita shift+space)
     "taps": None,           # tap gestures, filled from DEFAULT_TAPS below
 }
 PANEL_PX = 302  # panel width on the tablet, in panel pixels (about 34 mm)
-STRIP_PX = 200  # the mask strip, opposite the panel (about 22 mm)
-TAB_PX = 84     # the fold tab in the panel's top corner, also all that's left when folded
+STRIP_PX = PANEL_PX  # the mask and tracing image panels: as wide as the shortcut panel
+TAB_PX = 84     # one corner tab; a side's panels each have one, in a row from the corner (shortcuts, mask, image)
+# Only one kind of panel is open at a time: opening one folds the others (both shortcut panels count as one kind)
+OPEN_KEYS = ("panel_open", "panel_open_right", "mask_strip_open", "trace_strip_open")
+SHOW_KEYS = {"keys": "panel_show", "mask": "mask_show", "trace": "trace_show"}
+TRACE_KEYS = {"trace_opacity": "opacity", "trace_scale": "scale", "trace_x": "x", "trace_y": "y"}  # cfg -> the active image's entry
 PANEL_SLOTS = 16  # 8 rows of 2, as drawn on the tablet
 # kinds: shortcut (tap the keys), hold (keys down while held / locked), pen, snap, clear, none
 DEFAULT_BUTTONS = [
@@ -507,13 +517,14 @@ class Companion:
         self.engine = engine
         self.chan = None
         self.tab = None
-        self.trace_sent = None  # (path, mtime, size) of the image on the tablet
+        self.trace_sent = {}    # (path, mtime, size) -> the image's path on the tablet
+        self.tthumb_sent = {}   # tracing image id -> (version, path) of its thumbnail
         self.mask_sent = {}     # mask id -> (version, path) of its image on the tablet
         self.thumb_sent = {}    # mask id -> (version, path) of its thumbnail
         self.log = collections.deque(maxlen=300)
         self.started_at = 0
 
-    def trace_remote(self, path):
+    def trace_remote(self, path, tid="x"):
         """Copy the tracing image to the tablet (once per file version); its path there, or ""."""
         if not path or not self.tab:
             return ""
@@ -525,11 +536,12 @@ class Companion:
             return ""
         key = (path, st.st_mtime, st.st_size)
         ext = os.path.splitext(path)[1].lower()[:5] or ".img"
-        remote = f"{self.REMOTE}/trace{ext}"
-        if self.trace_sent != key:
-            with open(path, "rb") as f:
-                self.tab.run(f"cat > {remote}", f.read())
-            self.trace_sent = key
+        tid = re.sub(r"[^A-Za-z0-9]", "", str(tid)) or "x"
+        remote = f"{self.REMOTE}/trace-{tid}-{int(st.st_mtime)}{ext}"
+        if self.trace_sent.get(key) != remote:
+            with open(path, "rb") as f:  # a new name per version: the tablet loads a new file, not a cached one
+                self.tab.run(f"rm -f {self.REMOTE}/trace-{tid}-*; cat > {remote}", f.read())
+            self.trace_sent[key] = remote
         return remote
 
     def light(self, pct=None):
@@ -564,7 +576,7 @@ class Companion:
         if self.running or time.time() - self.started_at < 4:
             return  # one hand-over at a time: overlapping sessions fight over the panel
         self.started_at = time.time()
-        self.tab, self.trace_sent, self.mask_sent, self.thumb_sent = tab, None, {}, {}
+        self.tab, self.trace_sent, self.mask_sent, self.thumb_sent, self.tthumb_sent = tab, {}, {}, {}, {}
         src = os.path.join(rt.HERE, "..", "tablet", "companion")
         tab.run(f"mkdir -p {self.REMOTE}")
         for name in self.FILES:  # the app built for this model, under the one name run.sh starts
@@ -831,6 +843,8 @@ class Engine:
         self.trail_seen = 0     # the last pen report the page has had
         self.touch_out = None   # WindowsTouch, made when a profile first uses Windows touch
         self.load_masks()
+        self.load_traces()
+        self.one_open()
         self.rate = RateMeter()
         self.mapper = None
         self.refresh_mapper()
@@ -895,7 +909,7 @@ class Engine:
             "default_buttons_right": DEFAULT_BUTTONS_RIGHT, "presets": {p["name"]: {"left": p["buttons"], "right": p["buttons_right"]} for p in PRESETS},
             "pen_rate": self.rate.last, "mask_ver": self.pmask.ver, "mask_pct": round(100 * self.pmask.coverage()),
             "gesture_list": self.gesture_list(), "trace_key": self.trace_key(), "mask_vers": {k: m.ver for k, m in self.masks.items()},
-            "strip_px": STRIP_PX, "strip_side": self.strip_side(), "strip_shown": bool(self.strip_frac()), "tap_slots": TAP_SLOTS, "taps": clean_taps(self.cfg.get("taps")),
+            "strip_px": STRIP_PX, "strip_side": self.strip_side(), "strip_shown": bool(self.strip_frac()), "trace_thumb_vers": self.trace_thumb_vers(), "tap_slots": TAP_SLOTS, "taps": clean_taps(self.cfg.get("taps")),
         }
 
     def live(self):
@@ -959,8 +973,16 @@ class Engine:
                 self.keys.release_all()  # a held key belongs to the old layout's buttons
             if key == "taps":
                 val = clean_taps(val)
+            if key in SHOW_KEYS.values() and val not in ("always", "hover", "tap"):
+                val = "always"
             if key == "mask_show" and val == "hover":  # starts folded: its tab shows on hover
                 self.cfg["mask_strip_open"] = False
+            if key == "trace_show" and val == "hover":
+                self.cfg["trace_strip_open"] = False
+            if key in OPEN_KEYS and val:  # one kind of panel open at a time
+                for k in OPEN_KEYS:
+                    if k != key and not (k.startswith("panel_open") and key.startswith("panel_open")):
+                        self.cfg[k] = False
             if key == "panel_show" and val == "hover":  # starts folded: the fold button shows on hover
                 self.cfg["panel_open"] = self.cfg["panel_open_right"] = False
             if key == "rotate_keys":
@@ -972,7 +994,7 @@ class Engine:
                 val = max(40, min(400, int(val)))
             if key == "panel" and val not in PANEL_SIDES:
                 val = "left"
-            if key == "mask_side" and val not in ("left", "right"):
+            if key in ("mask_side", "trace_side") and val not in ("left", "right"):
                 val = "right"
             if key == "paper" and val not in PAPERS:
                 val = "plain"
@@ -1006,14 +1028,18 @@ class Engine:
                     entry[MASK_KEYS[key]] = val
             if key in ("mask_contrast", "mask_invert"):
                 self.pmask.set_contrast(self.cfg["mask_contrast"], self.cfg["mask_invert"])
+            if key in TRACE_KEYS:
+                self.trace_store()
             self.refresh_mapper()
             self.save()
-        if key in ("companion_rot", "panel", "panel_open", "panel_open_right", "panel_show", "mask_show", "mask_panel", "mask_strip_open", "mask_side"):
+        if key in ("companion_rot", "panel", "panel_open", "panel_open_right", "panel_show", "mask_show", "mask_panel", "mask_strip_open", "mask_side",
+                   "trace_panel", "trace_side", "trace_strip_open", "trace_show"):
             self.refresh_mapper()
         if key in ("area", "companion_rot", "trail_ms", "output", "snap", "panel", "panel_open", "panel_open_right", "panel_show", "mask_show",
                    "panel_buttons", "panel_buttons_right", "mask_side", "gestures", "swipe_step", "palm_size", "panel_profiles", "panel_profile",
                    "paper", "paper_mm", "trace_file", "trace_opacity", "trace_scale", "trace_x", "trace_y",
                    "trace_adjust", "mask_on", "mask_invert", "mask_panel", "mask_strip_open",
+                   "trace_panel", "trace_side", "trace_strip_open", "trace_show",
                    "taps"):
             self.sync_companion()
         if key in ("mask_contrast", "mask_invert"):
@@ -1085,25 +1111,56 @@ class Engine:
                     and self.cal is None)
 
     def strip_frac(self):
-        """Share of the tablet the open mask strip takes, or 0."""
+        """Share of the tablet the open mask panel keeps from the pen, or 0."""
         if not self.strip_avail() or not self.cfg.get("mask_strip_open") or self.cfg.get("mask_show") == "tap":
-            return 0.0  # Finger only: the pen draws through the strip
+            return 0.0  # Finger only: the pen draws through it
         return STRIP_PX / self.view_size()[0]
 
-    def strip_offset(self):
-        """How far in from its edge the strip (and its corner tab) starts, in view pixels: past an
-        open panel on that side, or past a folded panel's tab."""
-        side = self.strip_side()
-        if not self.panel_shown(side):
-            return 0
-        return PANEL_PX if self.panel_open(side) else TAB_PX
+    def trace_side(self):
+        return "left" if self.cfg.get("trace_side") == "left" else "right"
+
+    def trace_avail(self):
+        """Is the tracing image panel there at all (open, or folded to its corner tab)?"""
+        return bool(self.cfg.get("trace_panel", True) and self.cfg.get("traces") and self.companion.running
+                    and self.cal is None)
+
+    # The three kinds of panel: "keys" (shortcuts, one a side), "mask", "trace". A side's panels each
+    # have a corner tab, in this order from the corner, and open in the same place, one at a time.
+    def side_kinds(self, side):
+        kinds = ["keys"] if self.panel_shown(side) else []
+        if self.strip_avail() and self.strip_side() == side:
+            kinds.append("mask")
+        if self.trace_avail() and self.trace_side() == side:
+            kinds.append("trace")
+        return kinds
+
+    def kind_open(self, kind, side):
+        if kind == "keys":
+            return self.panel_open(side)
+        return bool(self.cfg.get("mask_strip_open" if kind == "mask" else "trace_strip_open"))
+
+    def kind_show(self, kind):
+        """A panel kind's Button setting: always | hover | tap."""
+        return self.cfg.get(SHOW_KEYS[kind]) or "always"
+
+    def open_kind(self, side):
+        """The kind of panel open on this side, or ""."""
+        return next((k for k in self.side_kinds(side) if self.kind_open(k, side)), "")
+
+    def one_open(self):
+        """Settings from before the panels shared a place: fold all but one kind."""
+        c = self.cfg
+        if c.get("panel") != "off" and (c.get("panel_open") or c.get("panel_open_right")):
+            c["mask_strip_open"] = c["trace_strip_open"] = False
+        elif c.get("mask_strip_open"):
+            c["trace_strip_open"] = False
 
     def side_reserved(self, side):
-        """Share of the tablet on this side that the panel and strip keep from the pen."""
-        w = self.view_size()[0]
-        if self.strip_side() == side and self.strip_frac():
-            return (self.strip_offset() + STRIP_PX) / w
-        return self.panel_frac(side)
+        """Share of the tablet on this side that its open panel keeps from the pen."""
+        kind = self.open_kind(side)
+        if not kind or self.kind_show(kind) == "tap":
+            return 0.0  # Finger only: the pen draws through the panel
+        return PANEL_PX / self.view_size()[0]
 
     def effective_area(self):
         a = list(self.cfg["area"])
@@ -1227,10 +1284,11 @@ class Engine:
                 n += 1
             mid = f"m{n}"
             names = {m["name"] for m in self.cfg["masks"]}
-            k = n
-            while (name or f"Mask {k}") in names:
+            k, label = n, name or f"Mask {n}"
+            while label in names:  # a name already taken gets a number (this looped for ever on a given name)
                 k += 1
-            entry = {"id": mid, "name": (name or f"Mask {k}")[:24], "contrast": 1.0, "mode": "fade", "invert": False, "strength": 1.0}
+                label = f"{name} {k}" if name else f"Mask {k}"
+            entry = {"id": mid, "name": label[:24], "contrast": 1.0, "mode": "fade", "invert": False, "strength": 1.0}
             self.cfg["masks"] = self.cfg["masks"] + [entry]
             self.masks[mid] = penmask.Mask(self.mask_path(mid))
             self.masks[mid].set_raw(bytes(penmask.N * penmask.N))  # a fresh file, even over an old one
@@ -1297,6 +1355,142 @@ class Engine:
                 self.save()
         self.mask_changed()
 
+    # ---- the tracing images
+    def trace_thumb_path(self, tid):
+        return os.path.join(os.path.dirname(rt.CONFIG_PATH), f"trace-{tid}-thumb.png")
+
+    def load_traces(self):
+        """The tracing images; carries over the single image of earlier versions."""
+        traces = [dict(t) for t in (self.cfg.get("traces") or []) if isinstance(t, dict) and t.get("id") and t.get("file")]
+        old = self.cfg.get("trace_file")
+        if not traces and old:
+            traces = [{"id": "t1", "name": os.path.splitext(os.path.basename(old))[0][:24] or "Image 1", "file": old,
+                       "opacity": float(self.cfg.get("trace_opacity") or 0.5), "scale": float(self.cfg.get("trace_scale") or 1),
+                       "x": float(self.cfg.get("trace_x") or 0), "y": float(self.cfg.get("trace_y") or 0)}]
+            self.cfg["trace_active"] = "t1"
+        self.cfg["traces"] = traces
+        self.use_trace(self.cfg.get("trace_active", ""))
+
+    def trace_entry(self, tid=None):
+        tid = self.cfg.get("trace_active") if tid is None else tid
+        return next((t for t in (self.cfg.get("traces") or []) if t["id"] == tid), None)
+
+    def use_trace(self, tid):
+        """Make an image the one shown (its file and place into trace_file / trace_x ...), or none."""
+        entry = self.trace_entry(tid)
+        self.cfg["trace_active"] = tid if entry else ""
+        self.cfg["trace_file"] = entry["file"] if entry else ""
+        if entry is None:
+            self.cfg["trace_adjust"] = False
+            return
+        self.cfg["trace_opacity"] = max(0.05, min(1.0, float(entry.get("opacity", 0.5))))
+        self.cfg["trace_scale"] = max(0.05, min(20.0, float(entry.get("scale", 1))))
+        self.cfg["trace_x"], self.cfg["trace_y"] = float(entry.get("x", 0)), float(entry.get("y", 0))
+
+    def trace_store(self):
+        """The shown image's place and strength, kept with it."""
+        entry = self.trace_entry()
+        if entry is not None:
+            for key, name in TRACE_KEYS.items():
+                entry[name] = self.cfg[key]
+
+    def pick_trace(self, tid):
+        """Switch tracing images (from the page or the tablet's panel); "" = none."""
+        with self.lock:
+            self.use_trace(tid)
+            self.save()
+        self.refresh_mapper()
+        self.sync_companion()
+        self.changed()
+
+    def add_trace(self, path, name=None):
+        with self.lock:
+            n = 1
+            while any(t["id"] == f"t{n}" for t in self.cfg["traces"]):
+                n += 1
+            tid = f"t{n}"
+            name = (name or os.path.splitext(os.path.basename(path))[0] or f"Image {n}").strip()[:24]
+            entry = {"id": tid, "name": name, "file": path, "opacity": float(self.cfg.get("trace_opacity") or 0.5),
+                     "scale": 1.0, "x": 0.0, "y": 0.0}
+            self.cfg["traces"] = self.cfg["traces"] + [entry]
+        self.pick_trace(tid)
+        return tid
+
+    def rename_trace(self, tid, name):
+        with self.lock:
+            entry = self.trace_entry(tid)
+            if entry is None or not str(name).strip():
+                return
+            entry["name"] = str(name).strip()[:24]
+            self.save()
+        self.push_tstrip()
+        self.changed()
+
+    def delete_trace(self, tid):
+        with self.lock:
+            if self.trace_entry(tid) is None:
+                return
+            self.cfg["traces"] = [t for t in self.cfg["traces"] if t["id"] != tid]
+            try:
+                os.remove(self.trace_thumb_path(tid))
+            except OSError:
+                pass
+            active = self.cfg["trace_active"]
+        self.pick_trace("" if active == tid else active)
+
+    def set_trace_thumb(self, tid, data_url):
+        """A small picture of the image for the tablet's panel; the page draws it, as a PNG data URL."""
+        if self.trace_entry(tid) is None or not str(data_url).startswith("data:image/png;base64,"):
+            return
+        raw = base64.b64decode(str(data_url).split(",", 1)[1])
+        if not raw.startswith(b"\x89PNG") or len(raw) > 400_000:
+            return
+        with open(self.trace_thumb_path(tid), "wb") as f:
+            f.write(raw)
+        self.push_tstrip()
+        self.changed()
+
+    def trace_thumb_vers(self):
+        """Each image's thumbnail version (0: none yet), so the page knows what to draw or fetch."""
+        out = {}
+        for t in self.cfg.get("traces") or []:
+            try:
+                st = os.stat(self.trace_thumb_path(t["id"]))
+                out[t["id"]] = int(st.st_mtime * 1000) % 10**9 or 1
+            except OSError:
+                out[t["id"]] = 0
+        return out
+
+    def trace_thumbs(self):
+        out = {}
+        for t in list(self.cfg.get("traces") or []):
+            try:
+                with open(self.trace_thumb_path(t["id"]), "rb") as f:
+                    out[t["id"]] = "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+            except OSError:
+                pass
+        return out
+
+    def push_tstrip(self):
+        """The tablet's tracing image panel: which side, and a thumbnail and name per image."""
+        c = self.companion
+        if not c.running or not c.tab:
+            return
+        c.send(f"tracestrip {int(self.trace_avail())} {self.trace_side()} {int(bool(self.cfg.get('trace_strip_open')))}")
+        vers, out = self.trace_thumb_vers(), []
+        for e in self.cfg.get("traces") or []:
+            ver, sent = vers.get(e["id"], 0), c.tthumb_sent.get(e["id"])
+            if ver and (not sent or sent[0] != ver):
+                remote = f"{c.REMOTE}/tthumb-{e['id']}-{ver}.png"
+                try:
+                    with open(self.trace_thumb_path(e["id"]), "rb") as f:
+                        c.tab.run(f"rm -f {c.REMOTE}/tthumb-{e['id']}-*.png; cat > {remote}", f.read())
+                except Exception:
+                    remote = ""
+                sent = c.tthumb_sent[e["id"]] = (ver, remote)
+            out.append({"id": e["id"], "name": e["name"], "thumb": sent[1] if ver and sent else ""})
+        c.send("traces " + json.dumps({"active": self.cfg.get("trace_active", ""), "list": out}, separators=(",", ":")))
+
     def mask_changed(self):
         if not self.cfg.get("mask_on"):
             self.set("mask_on", True)  # making a mask means wanting it
@@ -1362,30 +1556,24 @@ class Engine:
         return dataclasses.replace(s, pressure=int(round(lo + n * span)))
 
     def over_panel(self, s):
-        """Is the pen above a side panel, a fold tab or the mask strip? Then it works those, not Windows."""
+        """Is the pen above an open panel or a corner tab? Then it works those, not Windows."""
         if not s.in_range or not self.mapper:
             return False
         p, q = self.mapper.oriented(*self.mapper.uv(s.x, s.y))
         w, h = self.view_size()
         y = q * h
+        peek = getattr(self, "peek", ())
         for side in ("left", "right"):
             x = p * w if side == "left" else (1 - p) * w  # view pixels in from this side's edge
-            # Finger only: the pen never works the panel. Pen hover: a folded panel's fold button only
-            # while the tablet shows it ("peek")
-            hidden_tab = (self.cfg.get("panel_show") == "hover" and not self.panel_open(side)
-                          and side not in getattr(self, "peek", ()))
-            if self.panel_shown(side) and not self.panel_fingers_only() and not hidden_tab:
-                if x < (PANEL_PX if self.panel_open(side) else TAB_PX) and (self.panel_open(side) or y < TAB_PX):
+            kinds, opened = self.side_kinds(side), self.open_kind(side)
+            if y < TAB_PX and 0 <= x < TAB_PX * len(kinds):
+                show = self.kind_show(kinds[int(x // TAB_PX)])
+                # Finger only: the pen never works that panel's tab. Pen hover: with every panel on the
+                # side folded, the tab is only there while the tablet shows it ("peek")
+                if show != "tap" and not (show == "hover" and not opened and side not in peek):
                     return True
-            mshow = self.cfg.get("mask_show")
-            if (self.strip_avail() and self.strip_side() == side and mshow != "tap"
-                    and (mshow != "hover" or self.cfg.get("mask_strip_open") or "strip" in getattr(self, "peek", ()))):
-                off = self.strip_offset()
-                if self.strip_frac():
-                    if off <= x < off + STRIP_PX:
-                        return True
-                elif off <= x < off + TAB_PX and y < TAB_PX:
-                    return True  # the folded strip's corner tab
+            if opened and self.kind_show(opened) != "tap" and x < PANEL_PX:
+                return True
         return False
 
     def buttons(self):
@@ -1478,7 +1666,7 @@ class Engine:
         elif name in keys.SHORTCUTS:  # gestures
             self.keys.combo(keys.SHORTCUTS[name])
         elif name == "peek":  # Pen hover: a folded panel's fold button came up or went: "peek L R" (0|1 each)
-            self.peek = {sd for sd, f in zip(("left", "right", "strip"), parts[1:4]) if f == "1"}
+            self.peek = {sd for sd, f in zip(("left", "right"), parts[1:3]) if f == "1"}
             return
         elif name == "panel":  # a fold tab: "panel left|right 0|1" (older tablet apps: "panel 0|1")
             side, flag = (arg, parts[2]) if len(parts) > 2 else ("left", arg)
@@ -1487,6 +1675,7 @@ class Engine:
             with self.lock:
                 self.cfg["trace_x"], self.cfg["trace_y"] = float(parts[1]), float(parts[2])
                 self.cfg["trace_scale"] = max(0.05, min(20.0, float(parts[3])))
+                self.trace_store()
                 self.save()
         elif name == "maskpick" and len(parts) == 2:  # a tap in the tablet's mask strip, which then folds
             self.cfg["mask_strip_open"] = False
@@ -1496,6 +1685,11 @@ class Engine:
             self.set("paper", parts[1])
         elif name == "maskstrip" and len(parts) == 2:  # its corner tab
             self.set("mask_strip_open", parts[1] == "1")
+        elif name == "tracepick" and len(parts) == 2:  # a tap in the tablet's tracing image panel, which then folds
+            self.cfg["trace_strip_open"] = False
+            self.pick_trace("" if parts[1] == "none" else parts[1])
+        elif name == "tracestrip" and len(parts) == 2:
+            self.set("trace_strip_open", parts[1] == "1")
         elif name == "maskinvert":  # the strip's Invert tile or an Invert mask panel button
             if self.cfg.get("mask_active"):
                 self.set("mask_invert", not self.cfg.get("mask_invert"))
@@ -2013,7 +2207,7 @@ class Engine:
         c.send(f"panel {self.cfg.get('panel', 'left') if shown else 'off'} {PANEL_PX / self.view_size()[0]:.4f}")
         c.send(f"panelopen {int(self.panel_open('left'))} {int(self.panel_open('right'))}")
         self.peek = set()  # the tablet hides the fold buttons again on "panelshow"
-        c.send(f"panelshow {self.cfg.get('panel_show', 'always')} {self.cfg.get('mask_show', 'always')}")
+        c.send(f"panelshow {self.kind_show('keys')} {self.kind_show('mask')} {self.kind_show('trace')}")
         c.send(f"gestures {int(bool(self.cfg.get('gestures', True)))} {int(self.cfg.get('swipe_step', 100))} "
                f"{float(self.cfg.get('palm_size', 0))} {int(self.touch_mode() == 'windows')}")
         c.send("buttons " + json.dumps(self.companion_buttons(), separators=(",", ":")))
@@ -2027,7 +2221,7 @@ class Engine:
             c.send(f"light {self.light_now}")
         c.send(f"paper {self.cfg.get('paper', 'plain')} {float(self.cfg.get('paper_mm', 5)) * self.model.px_per_mm:.1f}")
         try:
-            remote = c.trace_remote(self.cfg.get("trace_file"))
+            remote = c.trace_remote(self.cfg.get("trace_file"), self.cfg.get("trace_active") or "x")
         except Exception as ex:
             remote = ""
             c.send(f"toast Tracing image not sent: {ex}")
@@ -2037,6 +2231,7 @@ class Engine:
         c.send(f"mask {int(bool(self.cfg.get('mask_on')))} {int(bool(self.cfg.get('mask_invert')))}")
         self.push_mask()
         self.push_strip()
+        self.push_tstrip()
         c.send("status Connected to PC. Pen " + ("on" if self.output_on else "off")
                + (", shapes on" if self.cfg.get("snap") else ""))
         if self.cal is not None:
