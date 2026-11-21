@@ -1,11 +1,8 @@
 # ReDrawable
-**Turn a reMarkable Paper Pro into a pressure-sensitive pen tablet for Windows.** The reMarkable 2 and 1
-are supported in beta.
+**Turn a reMarkable Paper Pro into a pressure-sensitive pen tablet for Windows and Linux PCs.** The reMarkable 2 and 1
+are supported in beta.Paper Pro Move WIP
 
-Plug the tablet in with its USB cable and draw in Photoshop, Krita, Clip Studio, Illustrator or any Windows Ink
-app. You get pressure, tilt, hover and the eraser end. The tablet's own screen becomes your drawing surface:
-paper patterns, a tracing image, pen masks and shortcut panels, with finger gestures for undo, redo, pan, zoom
-and rotate.
+Plug the tablet in with its USB cable and draw in Photoshop, Krita, Clip Studio, Illustrator and others. You get pressure, tilt, hover and the eraser end + a bunch of QoL features like pressure masks, customisable shortcut panels and paper lining on display for easier writing and graphing, software agnostic "snap to shape", custom finger gestures and more.
 
 **[Download ReDrawable](../../releases/latest)**: an installer, or a portable zip that runs from any folder.
 
@@ -18,15 +15,14 @@ and rotate.
 ## What it does
 
 
-### A real Windows pen
+### A real Windows/Linux pen
 
-ReDrawable uses Windows' own pen input (Windows Ink), so apps see a pen, not a mouse, and no driver is needed.
 4096 pressure levels, tilt, hover and the eraser end, at about 500 reports a second. Plug in and the pen and the
 tablet screen start; unplug and the tablet goes back to your notebooks within seconds. Nothing is installed
 permanently on the tablet.
 
 
-### Shortcut panels with Photoshop presets
+### Shortcut panels with presets
 
 One panel on each side of the tablet, or just one, or none, with 16 buttons each. A button can tap a shortcut,
 hold a key while your finger stays on it (Space to pan, Alt to pick), or switch the pen, shapes, front light or
