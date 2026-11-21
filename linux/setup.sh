@@ -11,14 +11,15 @@ VENV="$DATA/redrawable/venv"
 
 echo "== 1/4 System packages"
 if command -v pacman >/dev/null 2>&1; then
-  # libinput (with its debug-events tool) is part of every Arch desktop already
-  sudo pacman -S --needed python python-gobject webkit2gtk-4.1
+  # libinput (with its debug-events tool) is part of every Arch desktop already;
+  # libayatana-appindicator: the tray icon (waybar shows it), libnotify: notify-send
+  sudo pacman -S --needed python python-gobject webkit2gtk-4.1 libayatana-appindicator libnotify
 elif command -v dnf >/dev/null 2>&1; then
   # libinput-utils: the `libinput` command linux/check_devices.py uses
-  sudo dnf install -y python3 python3-gobject webkit2gtk4.1 libinput-utils
+  sudo dnf install -y python3 python3-gobject webkit2gtk4.1 libinput-utils libayatana-appindicator-gtk3 libnotify
 else
   echo "Not Arch or Fedora: install Python 3.10+, PyGObject and WebKitGTK yourself, e.g."
-  echo "  Debian/Ubuntu: sudo apt install python3-venv python3-gi gir1.2-webkit2-4.1 libinput-tools"
+  echo "  Debian/Ubuntu: sudo apt install python3-venv python3-gi gir1.2-webkit2-4.1 gir1.2-ayatanaappindicator3-0.1 libinput-tools"
 fi
 
 echo "== 2/4 Python environment in $VENV"

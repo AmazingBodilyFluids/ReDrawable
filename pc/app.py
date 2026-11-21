@@ -309,7 +309,7 @@ class Api:
     def _to_tray(self):
         """Close button with "close to tray" on: hide instead of quitting. True if it did."""
         if (self._quitting or not self._tray or not self._engine or not self._engine.cfg.get("close_to_tray")
-                or not winextras.user_closing(self._window.native)):
+                or (sys.platform == "win32" and not winextras.user_closing(self._window.native))):
             return False
         self._window.hide()
         if not self._told_tray:
@@ -331,6 +331,8 @@ def already_running():
             fcntl.flock(main.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return False
         except OSError:
+            import linuxtray
+            linuxtray.signal_show()  # it may be hidden in the tray
             return True
     if sys.platform != "win32":
         return False
@@ -436,6 +438,23 @@ def main():
             import ctypes
             api._resizer.hwnd = ctypes.windll.user32.FindWindowW(None, MAIN_TITLE)
 
+    def start_linux_tray():
+        import linuxtray
+        try:  # a second start shows this window, tray or not
+            linuxtray.listen_for_show(lambda: (api._tray.show_window() if api._tray else (
+                setattr(window, "hidden", False), window.show())))
+        except OSError as ex:
+            print("show signal:", repr(ex), flush=True)
+        why = linuxtray.available()
+        if why:  # closing the window then quits, as there is nowhere to bring it back from
+            print("no tray icon:", why, flush=True)
+            return
+        try:
+            api._tray = linuxtray.Tray(window, on_open=lambda: api._tray.show_window(),
+                                       on_toggle=api._toggle_pen, on_exit=api._exit)
+        except Exception as ex:
+            print("tray icon failed:", repr(ex), flush=True)
+
     def boot():
         try:
             api._engine = Engine(on_change=notify)
@@ -478,6 +497,8 @@ def main():
                 pass
         if sys.platform == "win32":
             start_tray()
+        elif sys.platform.startswith("linux"):
+            start_linux_tray()
         notify()
         try:
             if splash:
