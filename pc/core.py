@@ -56,6 +56,7 @@ DEFAULTS = {
     # Button: always | hover (a folded panel's fold button shows only while the pen hovers along that
     # edge; a pen tap on it opens the panel) | tap (panels shown, only fingers press them, the pen draws through)
     "panel_show": "always",
+    "mask_show": "always",  # the same for the mask strip's corner tab and the strip
     # touch contacts bigger than this are a palm; 0 = off. In Qt's units, about 0.75 x the panel's raw
     # TOUCH_MAJOR: measured fingertips 6-16 (raw 8-21), resting palm edge 19-49 (raw 25-63)
     "palm_size": 20,
@@ -958,6 +959,8 @@ class Engine:
                 self.keys.release_all()  # a held key belongs to the old layout's buttons
             if key == "taps":
                 val = clean_taps(val)
+            if key == "mask_show" and val == "hover":  # starts folded: its tab shows on hover
+                self.cfg["mask_strip_open"] = False
             if key == "panel_show" and val == "hover":  # starts folded: the fold button shows on hover
                 self.cfg["panel_open"] = self.cfg["panel_open_right"] = False
             if key == "rotate_keys":
@@ -1005,9 +1008,9 @@ class Engine:
                 self.pmask.set_contrast(self.cfg["mask_contrast"], self.cfg["mask_invert"])
             self.refresh_mapper()
             self.save()
-        if key in ("companion_rot", "panel", "panel_open", "panel_open_right", "panel_show", "mask_panel", "mask_strip_open", "mask_side"):
+        if key in ("companion_rot", "panel", "panel_open", "panel_open_right", "panel_show", "mask_show", "mask_panel", "mask_strip_open", "mask_side"):
             self.refresh_mapper()
-        if key in ("area", "companion_rot", "trail_ms", "output", "snap", "panel", "panel_open", "panel_open_right", "panel_show",
+        if key in ("area", "companion_rot", "trail_ms", "output", "snap", "panel", "panel_open", "panel_open_right", "panel_show", "mask_show",
                    "panel_buttons", "panel_buttons_right", "mask_side", "gestures", "swipe_step", "palm_size", "panel_profiles", "panel_profile",
                    "paper", "paper_mm", "trace_file", "trace_opacity", "trace_scale", "trace_x", "trace_y",
                    "trace_adjust", "mask_on", "mask_invert", "mask_panel", "mask_strip_open",
@@ -1083,8 +1086,8 @@ class Engine:
 
     def strip_frac(self):
         """Share of the tablet the open mask strip takes, or 0."""
-        if not self.strip_avail() or not self.cfg.get("mask_strip_open"):
-            return 0.0
+        if not self.strip_avail() or not self.cfg.get("mask_strip_open") or self.cfg.get("mask_show") == "tap":
+            return 0.0  # Finger only: the pen draws through the strip
         return STRIP_PX / self.view_size()[0]
 
     def strip_offset(self):
@@ -1374,7 +1377,9 @@ class Engine:
             if self.panel_shown(side) and not self.panel_fingers_only() and not hidden_tab:
                 if x < (PANEL_PX if self.panel_open(side) else TAB_PX) and (self.panel_open(side) or y < TAB_PX):
                     return True
-            if self.strip_avail() and self.strip_side() == side:
+            mshow = self.cfg.get("mask_show")
+            if (self.strip_avail() and self.strip_side() == side and mshow != "tap"
+                    and (mshow != "hover" or self.cfg.get("mask_strip_open") or "strip" in getattr(self, "peek", ()))):
                 off = self.strip_offset()
                 if self.strip_frac():
                     if off <= x < off + STRIP_PX:
@@ -1473,7 +1478,7 @@ class Engine:
         elif name in keys.SHORTCUTS:  # gestures
             self.keys.combo(keys.SHORTCUTS[name])
         elif name == "peek":  # Pen hover: a folded panel's fold button came up or went: "peek L R" (0|1 each)
-            self.peek = {sd for sd, f in zip(("left", "right"), parts[1:3]) if f == "1"}
+            self.peek = {sd for sd, f in zip(("left", "right", "strip"), parts[1:4]) if f == "1"}
             return
         elif name == "panel":  # a fold tab: "panel left|right 0|1" (older tablet apps: "panel 0|1")
             side, flag = (arg, parts[2]) if len(parts) > 2 else ("left", arg)
@@ -2008,7 +2013,7 @@ class Engine:
         c.send(f"panel {self.cfg.get('panel', 'left') if shown else 'off'} {PANEL_PX / self.view_size()[0]:.4f}")
         c.send(f"panelopen {int(self.panel_open('left'))} {int(self.panel_open('right'))}")
         self.peek = set()  # the tablet hides the fold buttons again on "panelshow"
-        c.send(f"panelshow {self.cfg.get('panel_show', 'always')}")
+        c.send(f"panelshow {self.cfg.get('panel_show', 'always')} {self.cfg.get('mask_show', 'always')}")
         c.send(f"gestures {int(bool(self.cfg.get('gestures', True)))} {int(self.cfg.get('swipe_step', 100))} "
                f"{float(self.cfg.get('palm_size', 0))} {int(self.touch_mode() == 'windows')}")
         c.send("buttons " + json.dumps(self.companion_buttons(), separators=(",", ":")))

@@ -521,6 +521,15 @@ class PanelGeometry(unittest.TestCase):
         self.assertAlmostEqual(e.panel_frac(), f)
         self.assertTrue(e.over_panel(self.pen(f / 2, 0.5)))
 
+    def test_mask_button_modes(self):
+        e = self.engine(panel="off", mask_side="right", masks=[{"id": "a"}], mask_strip_open=False, mask_show="hover")
+        self.assertFalse(e.over_panel(self.pen(0.99, 0.02)))   # folded strip's tab hidden: draw there
+        e.tablet_action("peek 0 0 1")
+        self.assertTrue(e.over_panel(self.pen(0.99, 0.02)))
+        e.cfg.update(mask_show="tap", mask_strip_open=True)
+        self.assertEqual(e.strip_frac(), 0)
+        self.assertFalse(e.over_panel(self.pen(0.99, 0.5)))    # Finger only: the pen draws through
+
     def test_finger_only_panel_lets_the_pen_draw_through(self):
         f = core.PANEL_PX / 2160
         e = self.engine(panel="left", panel_open=True, panel_show="tap")

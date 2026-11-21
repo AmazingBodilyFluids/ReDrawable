@@ -16,7 +16,7 @@
 //   snap W X Y X Y.. replace the current/last stroke with a clean shape (digitizer fractions)
 //   panel left|right|both|off [FRAC]   side panels with shortcut buttons, FRAC of the view width each
 //   panelopen L [R]  which panels are unfolded (left, right)
-//   panelshow always|hover|tap   hover: a folded panel's fold button shows only while the pen hovers
+//   panelshow P [M]  P for the panels, M for the mask strip: always|hover|tap. hover: a folded panel's fold button shows only while the pen hovers
 //                    along that edge; tap: panels shown, only fingers press them, the pen draws through
 //   state pen 0|1 snap 0|1        button states owned by the PC
 //   toast TEXT       short message in the panel

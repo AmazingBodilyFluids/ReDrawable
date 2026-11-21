@@ -49,22 +49,32 @@ Window {
     //          a pen tap on it opens the panel. Hidden, the corner is drawing area.
     //   tap:   the panels stay shown, but only fingers press them; the pen draws through them
     property string panelShow: "always"
+    property string maskShow: "always"   // the same for the mask strip's corner tab and the strip
     property bool peekL: false           // hover: the folded panel's fold button is showing
     property bool peekR: false
+    property bool peekS: false           // hover: the folded mask strip's corner tab is showing
     property string hoverSide: ""        // where the pen hovers, waiting for hoverTimer
-    function peeked(s) { return s === "right" ? peekR : peekL }
+    function peeked(s) { return s === "strip" ? peekS : s === "right" ? peekR : peekL }
     function tabHidden(s) { return panelShow === "hover" && !sideOpen(s) && !peeked(s) }
+    function stripTabHidden() { return maskShow === "hover" && !stripOpen && !peekS }
     function setPeek(s, on) {
         if (peeked(s) === on) return
-        if (s === "right") peekR = on; else peekL = on
-        act("peek " + (peekL ? 1 : 0) + " " + (peekR ? 1 : 0))
+        if (s === "strip") peekS = on; else if (s === "right") peekR = on; else peekL = on
+        act("peek " + (peekL ? 1 : 0) + " " + (peekR ? 1 : 0) + " " + (peekS ? 1 : 0))
         if (!on) refreshScreen()   // the ink and paper under it come back in one clean pass
     }
-    function unpeek() { hoverSide = ""; hoverTimer.stop(); setPeek("left", false); setPeek("right", false) }
+    function unpeek() { hoverSide = ""; hoverTimer.stop(); setPeek("left", false); setPeek("right", false); setPeek("strip", false) }
     // the edge of a folded panel under p ("left", "right" or ""), where hovering shows its fold button
     function foldedEdgeAt(p) {
-        if (panelOnL && !panelOpen && p.x < panelPx) return "left"
-        if (panelOnR && !panelOpenR && p.x >= view.width - panelPx) return "right"
+        if (panelShow === "hover") {
+            if (panelOnL && !panelOpen && p.x < panelPx) return "left"
+            if (panelOnR && !panelOpenR && p.x >= view.width - panelPx) return "right"
+        }
+        if (maskShow === "hover" && mode === "ink" && stripAvail && !stripOpen) {
+            var sw = Math.max(tabS, stripFrac * view.width)   // the band the open strip would take
+            if (stripSide === "right" ? p.x >= view.width - stripOff - sw && p.x < view.width - stripOff
+                                      : p.x >= stripOff && p.x < stripOff + sw) return "strip"
+        }
         return ""
     }
     // hovering still for a moment brings the button up; contact never does, so a stroke can run
@@ -75,7 +85,7 @@ Window {
             if (hoverSide !== z) { hoverSide = z; hoverTimer.restart() }
         } else if (hoverSide !== "") { hoverSide = ""; hoverTimer.stop() }
         if (!(peekL || peekR)) return
-        if (inRange && (z !== "" && peeked(z) || penBtn === -2 || penBtn === -6)) peekHide.stop()
+        if (inRange && (z !== "" && peeked(z) || penBtn === -2 || penBtn === -6 || stripPen)) peekHide.stop()
         else if (!peekHide.running) peekHide.restart()
     }
     onPanelShowChanged: unpeek()
@@ -141,17 +151,22 @@ Window {
     readonly property real stripX: stripSide === "right" ? view.width - stripOff - stripW : stripOff
     readonly property real stripTabX: stripSide === "right" ? view.width - stripOff - tabS : stripOff
     // what the panels and the open strip keep from the drawing area, each side
-    readonly property real resL: stripSide === "left" && stripW > 0 ? stripOff + stripW : panelWL
-    readonly property real resR: stripSide === "right" && stripW > 0 ? stripOff + stripW : panelWR
+    readonly property bool stripOwn: stripW > 0 && maskShow !== "tap"   // "tap": the pen draws through the strip
+    readonly property real resL: stripSide === "left" && stripOwn ? stripOff + stripW : panelWL
+    readonly property real resR: stripSide === "right" && stripOwn ? stripOff + stripW : panelWR
     readonly property real stripThumbH: (stripW - 24) * view.height / view.width
     readonly property real stripTileH: stripThumbH + 46
     readonly property int stripTop: 256   // the thumbnails start under Invert and None
     function stripTabHit(p) {
-        return mode === "ink" && stripAvail && p.y < tabS && p.x >= stripTabX && p.x < stripTabX + tabS
+        return mode === "ink" && stripAvail && !stripTabHidden() && p.y < tabS && p.x >= stripTabX && p.x < stripTabX + tabS
     }
     function inStrip(p) { return stripTabHit(p) || (stripW > 0 && p.x >= stripX && p.x < stripX + stripW) }
     function stripPick(p) {  // the corner tab, Invert, None, then a thumbnail and name per mask
-        if (stripTabHit(p)) { stripOpen = !stripOpen; act("maskstrip " + (stripOpen ? 1 : 0)); return }
+        if (stripTabHit(p)) {
+            stripOpen = !stripOpen; act("maskstrip " + (stripOpen ? 1 : 0))
+            if (maskShow === "hover" && !stripOpen) setPeek("strip", true)   // folded under the pen: the tab stays a moment
+            return
+        }
         if (p.y >= 96 && p.y < 166) { act("maskinvert"); return }  // the strip stays open to show it
         if (p.y >= paperTileY && p.y < paperTileY + paperTileH) {  // the paper: left half back, right half on
             var k = papers.indexOf(paper), n = papers.length
@@ -164,7 +179,7 @@ Window {
             var i = Math.floor((p.y - stripTop) / (stripTileH + 10))
             if (i < maskList.length && (p.y - stripTop) - i * (stripTileH + 10) < stripTileH) id = maskList[i].id
         }
-        if (id !== null) { stripOpen = false; act("maskpick " + id) }  // picked: the strip folds away
+        if (id !== null) { stripOpen = false; act("maskpick " + id); if (maskShow === "hover") setPeek("strip", true) }  // picked: the strip folds away
     }
     // the paper selector at the foot of the strip, in the PC's order (core.PAPERS)
     readonly property var papers: ["plain", "lined", "squared", "dots", "cross", "blueprint", "isometric"]
@@ -264,7 +279,7 @@ Window {
         else if (c === "clear") clearInk()
         else if (c === "snap") snap(a)
         else if (c === "panel") { panelSide = a[0]; if (a.length > 1) panelFrac = parseFloat(a[1]) }
-        else if (c === "panelshow") { panelShow = a[0]; unpeek() }
+        else if (c === "panelshow") { panelShow = a[0]; maskShow = a[1] || "always"; unpeek() }
         else if (c === "panelopen") { panelOpen = a[0] === "1"; if (a.length > 1) panelOpenR = a[1] === "1" }
         else if (c === "paper") { paper = a[0]; if (a.length > 1) paperStep = Math.max(12, parseFloat(a[1])) }
         else if (c === "trace") {  // trace <opacity> <scale> <x> <y> <file or empty>
@@ -417,8 +432,8 @@ Window {
             if (gMode !== "" && gMode !== "dead") { endGesture(); sendTouch() }  // the pen came back: a hand on the screen is a palm
         }
         var p = view.mapFromItem(win.contentItem, px, py)
-        if (panelShow === "hover" && mode === "ink") peekPen(p, touching, inRange)
-        if (stripPen || (touching && inStrip(p))) {  // the mask strip takes the pen; so does the PC
+        if ((panelShow === "hover" || maskShow === "hover") && mode === "ink") peekPen(p, touching, inRange)
+        if (stripPen || (touching && inStrip(p) && maskShow !== "tap")) {  // the mask strip takes the pen (so does the PC); "tap": the pen draws through
             endStroke()
             if (touching && !stripPen) { stripPen = true; stripPick(p) }
             if (!touching) stripPen = false
@@ -1021,7 +1036,7 @@ Window {
 
         // The mask strip's corner tab: a half-shaded square at the strip's top corner.
         Rectangle {
-            visible: win.mode === "ink" && win.stripAvail
+            visible: win.mode === "ink" && win.stripAvail && !win.stripTabHidden()
             x: win.stripTabX; y: 0
             width: win.tabS; height: win.tabS
             color: win.stripOpen ? "black" : "white"; border.width: 3; border.color: "black"

@@ -91,6 +91,8 @@
             <p class="hint mts" id="maskInfo"></p>
             <div class="opt"><div class="tx" data-tip="A corner tab on the tablet for masks and paper."><div class="t1">Mask strip</div></div>
               <div class="seg maskSide"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="off">Off</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Default: corner tab always shown, pen and fingers use it. Pen hover: while the strip is folded its tab shows only when the pen hovers along that edge; tap it to open. Finger only: tab and strip stay shown, the pen draws through them, only fingers use them."><div class="t1">Button</div></div>
+              <div class="seg" data-key="mask_show"><button data-v="always">Default</button><button data-v="hover">Pen hover</button><button data-v="tap">Finger only</button></div></div>
             <div class="opt"><div class="tx" data-tip="Move: drag on the preview, wheel or pinch to scale. Reset: back to full size. Invert swaps black and white. Clear empties the mask."><div class="t1">Place</div></div>
               <div class="row"><button class="btn ghost" id="maskMove" onclick="Scr.toggleMove('mask')">Move</button><button class="btn ghost" id="maskCentre" onclick="maskCentre()">Reset</button><button class="btn ghost" id="maskInv" onclick="maskInvert()">Invert</button><button class="btn ghost" onclick="maskOp('clear')">Clear</button></div></div>
             <div class="opt"><div class="tx" id="maskModeTx"><div class="t1">Grey sets</div></div>
@@ -205,8 +207,8 @@
             <div class="pane-title">Panels</div>
             <div class="opt"><div class="tx" data-tip="16 buttons a side. Profile arrows switch both. The corner tab on the tablet folds a panel away."><div class="t1">Shortcuts</div></div>
               <div class="seg" data-key="panel"><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="both">Both</button><button data-v="off">Off</button></div></div>
-            <div class="opt"><div class="tx" data-tip="Always: fold button always shown, pen and fingers press the buttons. Pen hover: a folded panel's fold button shows only while the pen hovers along that edge; tap it to open the panel. Finger only: panels stay shown, the pen draws through them, only fingers press."><div class="t1">Button</div></div>
-              <div class="seg" data-key="panel_show"><button data-v="always">Always</button><button data-v="hover">Pen hover</button><button data-v="tap">Finger only</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Default: fold button always shown, pen and fingers press the buttons. Pen hover: a folded panel's fold button shows only while the pen hovers along that edge; tap it to open the panel. Finger only: panels stay shown, the pen draws through them, only fingers press."><div class="t1">Button</div></div>
+              <div class="seg" data-key="panel_show"><button data-v="always">Default</button><button data-v="hover">Pen hover</button><button data-v="tap">Finger only</button></div></div>
             <div class="opt"><div class="tx" data-tip="Shows that panel unfolded and close up (scroll to see all of it). Press it again for the whole tablet. Click a button there to edit it, drag one onto another to swap."><div class="t1">Edit</div></div>
               <div class="seg" id="pmSide" data-tip="Which panel to edit"><button data-v="left" class="on">Left</button><button data-v="right">Right</button></div>
             </div>

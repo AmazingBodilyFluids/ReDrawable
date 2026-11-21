@@ -1774,8 +1774,9 @@ const Scr = {
     const stripAvail = !cal && c.mask_panel !== false && (c.masks || []).length > 0;
     const stripW = stripAvail && c.mask_strip_open ? S.strip_px : 0;
     const stripOff = stripSide === "left" ? (onL ? (openL ? P : T) : 0) : (onR ? (openR ? P : T) : 0);
-    const resL = stripSide === "left" && stripW ? stripOff + stripW : hides ? 0 : wL;
-    const resR = stripSide === "right" && stripW ? stripOff + stripW : hides ? 0 : wR;
+    const sOwn = stripW && c.mask_show !== "tap";  // Finger only: the strip keeps nothing from the pen
+    const resL = stripSide === "left" && sOwn ? stripOff + stripW : hides ? 0 : wL;
+    const resR = stripSide === "right" && sOwn ? stripOff + stripW : hides ? 0 : wR;
     return { VW, VH, T, P, cal, hides, onL, onR, openL, openR, wL, wR, panelOn: onL || onR,
              main: onL ? "left" : onR ? "right" : "", stripSide, stripAvail, stripW, stripOff,
              stripX: stripSide === "right" ? VW - stripOff - stripW : stripOff,
