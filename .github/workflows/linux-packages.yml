@@ -23,7 +23,6 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
-      - run: git clone --depth 1 https://github.com/flathub/shared-modules linux/flatpak/shared-modules
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: ReDrawable-0.11.0.flatpak

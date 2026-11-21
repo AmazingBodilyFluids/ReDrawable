@@ -1,5 +1,4 @@
 # ReDrawable as a Flatpak (beta). Build (needs flatpak-builder and flathub's GNOME 48 runtime):
-#   git clone --depth 1 https://github.com/flathub/shared-modules linux/flatpak/shared-modules
 #   flatpak-builder --user --install-deps-from=flathub --force-clean --repo=repo build \
 #       linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.yml
 #   flatpak build-bundle repo ReDrawable.flatpak io.github.amazingbodilyfluids.ReDrawable
@@ -25,8 +24,6 @@ finish-args:
   - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.freedesktop.Flatpak         # hyprctl (monitors, focused app) and pkexec on the host
 modules:
-  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
-
   - name: python-deps
     buildsystem: simple
     build-options:
@@ -47,7 +44,7 @@ modules:
       - install -Dm644 linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.desktop -t /app/share/applications
       - install -Dm644 linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.metainfo.xml -t /app/share/metainfo
       # fail the build here, not on the user's desk, if the runtime lacks what the window needs
-      - python3 -c "import gi; gi.require_version('WebKit2', '4.1'); gi.require_version('AyatanaAppIndicator3', '0.1'); from gi.repository import WebKit2, AyatanaAppIndicator3; import webview, paramiko; print('deps ok')"
+      - python3 -c "import gi; gi.require_version('WebKit2', '4.1'); from gi.repository import WebKit2; import webview, paramiko; print('deps ok')"
     sources:
       - type: dir
         path: ../..
@@ -56,6 +53,5 @@ modules:
           - .github
           - installer
           - docs
-          - linux/flatpak/shared-modules
           - build
           - repo

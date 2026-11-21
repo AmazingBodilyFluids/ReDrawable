@@ -41,8 +41,8 @@ Log out and back in once afterwards. Then start ReDrawable from the launcher, or
 - **Splash and tray.** The splash shows on GNOME, KDE and X11 as a small window. It is skipped on tiling
   compositors (Hyprland, Sway, i3), which would tile it. `REDRAWABLE_SPLASH=1` or `=0` forces it.
 - **Tray.** With a tray on the desktop (waybar's tray module on Omarchy, KDE, GNOME with the AppIndicator
-  extension) closing the window, also with Super+W, only hides it: the pen keeps working, the tray icon's
-  menu opens it again or exits, and starting ReDrawable again brings the window back. Without a tray,
+  extension) closing the window, also with Super+W, only hides it: the pen keeps working, double-clicking the
+  tray icon (or middle click, or its right-click menu) opens it again; the menu also exits, and starting ReDrawable again brings the window back. Without a tray,
   closing quits. *Settings → Close to tray* turns this off. On Wayland the title bar has only the close button.
 
 ## Things to check if something's off
