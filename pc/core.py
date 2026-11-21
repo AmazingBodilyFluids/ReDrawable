@@ -806,6 +806,10 @@ class Engine:
         if self.cfg.get("palm_size") == 28:  # first guess, in raw units; Qt reports ~0.75 of that
             self.cfg["palm_size"] = 20
         self.calibration = saved.get("calibration")
+        # one calibration per tablet model: the current one in "calibration", the others kept here
+        self.calibrations = dict(saved.get("calibrations") or {})
+        if self.calibration and "model" not in self.calibration:
+            self.calibration["model"] = self.cfg.get("model") or devices.DEFAULT.key  # from before models had their own
         if self.calibration and not saved.get("gui", {}).get("onboarded"):
             self.cfg["onboarded"] = True  # an existing setup (calibrated before) needs no walkthrough
         if (self.calibration or {}).get("homography"):
@@ -1815,6 +1819,9 @@ class Engine:
         cfg["gui"] = {k: self.cfg[k] for k in DEFAULTS if k in self.cfg}
         if self.calibration is not None:
             cfg["calibration"] = self.calibration
+        else:
+            cfg.pop("calibration", None)  # e.g. a Move plugged in after a Paper Pro: kept in "calibrations"
+        cfg["calibrations"] = self.calibrations
         rt.save_config(cfg)
 
     def build_mapper(self, absinfo):
@@ -1947,7 +1954,20 @@ class Engine:
         self.set_status("idle", "Disconnected. Press Connect, or unplug and plug in again.")
 
     def set_model(self, model):
-        """The connected reMarkable: its screen, its size in mm and what it has (devices.py)."""
+        """The connected reMarkable: its screen, its size in mm and what it has (devices.py).
+        Each model keeps its own calibration: a Paper Pro's doesn't fit a Move."""
+        cal = getattr(self, "calibration", None)
+        if cal and cal.get("model") != model.key:
+            self.calibrations[cal["model"]] = cal
+            self.calibration = None
+        if not getattr(self, "calibration", None) and model.key in getattr(self, "calibrations", {}):
+            self.calibration = self.calibrations.pop(model.key)
+        if cal is not self.calibration and hasattr(self, "cfg"):  # swapped: the cursor direction goes with it
+            pos = POSITIONS.get(self.position() or "")
+            if (self.calibration or {}).get("homography"):
+                self.cfg["orientation"] = "as-calibrated"
+            elif pos:
+                self.cfg["orientation"] = pos["orientation"]
         self.model = model
         rt.PANEL_MM = model.panel_mm  # calibration size and shapes work in the panel's mm
 
@@ -2294,6 +2314,7 @@ class Engine:
             self.changed()
             return
         result["device"] = self.pen["name"]
+        result["model"] = self.model.key
         result["date"] = time.strftime("%Y-%m-%d %H:%M")
         self.calibration = result
         self.cfg["orientation"] = "as-calibrated"  # the taps already capture how the tablet sits
