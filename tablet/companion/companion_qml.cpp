@@ -44,50 +44,54 @@ Window {
     readonly property bool panelOnR: mode === "ink" && (panelSide === "right" || panelSide === "both")
     readonly property bool panelOn: panelOnL || panelOnR
     readonly property real panelPx: panelFrac * view.width
-    // "panelshow always|hover|tap": hiding panels keep nothing from the drawing area and come up
-    // when the pen hovers there a moment (hover) or a finger taps there (tap; the pen never presses)
+    // "panelshow always|hover|tap" (the PC's Button setting):
+    //   hover: a folded panel's fold button is hidden until the pen hovers along that edge a moment;
+    //          a pen tap on it opens the panel. Hidden, the corner is drawing area.
+    //   tap:   the panels stay shown, but only fingers press them; the pen draws through them
     property string panelShow: "always"
-    readonly property bool hidePanels: panelShow === "hover" || panelShow === "tap"
-    property bool peekL: false
+    property bool peekL: false           // hover: the folded panel's fold button is showing
     property bool peekR: false
     property string hoverSide: ""        // where the pen hovers, waiting for hoverTimer
     function peeked(s) { return s === "right" ? peekR : peekL }
-    function setPeek(s, on, ms) {
-        if (peeked(s) === on) { if (on) { peekHide.interval = ms; peekHide.restart() } return }
+    function tabHidden(s) { return panelShow === "hover" && !sideOpen(s) && !peeked(s) }
+    function setPeek(s, on) {
+        if (peeked(s) === on) return
         if (s === "right") peekR = on; else peekL = on
-        if (on) { peekHide.interval = ms; peekHide.restart() }
         act("peek " + (peekL ? 1 : 0) + " " + (peekR ? 1 : 0))
         if (!on) refreshScreen()   // the ink and paper under it come back in one clean pass
     }
-    function unpeek() { setPeek("left", false, 0); setPeek("right", false, 0) }
-    // the pen near a hiding panel: hovering still for a moment brings it up; contact never does,
-    // so a stroke can run into the corner. It goes a moment after the pen leaves.
+    function unpeek() { hoverSide = ""; hoverTimer.stop(); setPeek("left", false); setPeek("right", false) }
+    // the edge of a folded panel under p ("left", "right" or ""), where hovering shows its fold button
+    function foldedEdgeAt(p) {
+        if (panelOnL && !panelOpen && p.x < panelPx) return "left"
+        if (panelOnR && !panelOpenR && p.x >= view.width - panelPx) return "right"
+        return ""
+    }
+    // hovering still for a moment brings the button up; contact never does, so a stroke can run
+    // into the corner. It goes a moment after the pen leaves that edge.
     function peekPen(p, touching, inRange) {
-        var z = zoneAt(p)
-        if (panelShow === "hover" && inRange && !touching && !penDown && z !== "" && !peeked(z)) {
+        var z = foldedEdgeAt(p)
+        if (inRange && !touching && !penDown && z !== "" && !peeked(z)) {
             if (hoverSide !== z) { hoverSide = z; hoverTimer.restart() }
         } else if (hoverSide !== "") { hoverSide = ""; hoverTimer.stop() }
-        if (!(peekL || peekR) || panelShow !== "hover") return
-        if (inRange && z !== "" && peeked(z)) peekHide.stop()
-        else if (!peekHide.running) { peekHide.interval = 1200; peekHide.restart() }
+        if (!(peekL || peekR)) return
+        if (inRange && (z !== "" && peeked(z) || penBtn === -2 || penBtn === -6)) peekHide.stop()
+        else if (!peekHide.running) peekHide.restart()
     }
-    onPanelShowChanged: { hoverSide = ""; unpeek() }
-    Timer { id: hoverTimer; interval: 350; onTriggered: if (win.hoverSide !== "") { win.setPeek(win.hoverSide, true, 1200); win.hoverSide = "" } }
+    onPanelShowChanged: unpeek()
+    Timer { id: hoverTimer; interval: 350; onTriggered: if (win.hoverSide !== "") { win.setPeek(win.hoverSide, true); win.hoverSide = "" } }
     Timer { id: peekHide; interval: 1200; onTriggered: win.unpeek() }
-    readonly property real panelWL: panelOnL && panelOpen && !hidePanels ? panelPx : 0
-    readonly property real panelWR: panelOnR && panelOpenR && !hidePanels ? panelPx : 0
+    // what the open panels keep from the drawing area: nothing with "tap", the pen draws there
+    readonly property real panelWL: panelOnL && panelOpen && panelShow !== "tap" ? panelPx : 0
+    readonly property real panelWR: panelOnR && panelOpenR && panelShow !== "tap" ? panelPx : 0
     // the panel with the gestures button and the light bar: the left one, else the right
     readonly property string mainSide: panelOnL ? "left" : panelOnR ? "right" : ""
     function sideOpen(s) { return s === "right" ? panelOpenR : panelOpen }
     function sideX(s) { return s === "right" ? view.width - panelPx : 0 }
     // which panel (or folded panel's tab) is under p: "left", "right" or ""
-    function panelAt(p) {  // a hiding panel only while it is up
-        var z = zoneAt(p)
-        return !hidePanels || peeked(z) ? z : ""
-    }
-    function zoneAt(p) {
-        if (panelOnL && (panelOpen ? p.x < panelPx : (p.x < tabS && p.y < tabS))) return "left"
-        if (panelOnR && (panelOpenR ? p.x >= view.width - panelPx : (p.x >= view.width - tabS && p.y < tabS))) return "right"
+    function panelAt(p) {
+        if (panelOnL && (panelOpen ? p.x < panelPx : (p.x < tabS && p.y < tabS && !tabHidden("left")))) return "left"
+        if (panelOnR && (panelOpenR ? p.x >= view.width - panelPx : (p.x >= view.width - tabS && p.y < tabS && !tabHidden("right")))) return "right"
         return ""
     }
     readonly property real headH: 190   // buttons 32 px under the profile row, as far as the gestures button is under them
@@ -260,7 +264,7 @@ Window {
         else if (c === "clear") clearInk()
         else if (c === "snap") snap(a)
         else if (c === "panel") { panelSide = a[0]; if (a.length > 1) panelFrac = parseFloat(a[1]) }
-        else if (c === "panelshow") { panelShow = a[0]; hoverSide = ""; unpeek() }
+        else if (c === "panelshow") { panelShow = a[0]; unpeek() }
         else if (c === "panelopen") { panelOpen = a[0] === "1"; if (a.length > 1) panelOpenR = a[1] === "1" }
         else if (c === "paper") { paper = a[0]; if (a.length > 1) paperStep = Math.max(12, parseFloat(a[1])) }
         else if (c === "trace") {  // trace <opacity> <scale> <x> <y> <file or empty>
@@ -333,9 +337,9 @@ Window {
     }
     // ---- panel: the fold tab and the buttons, by finger or pen
     function tabHit(p) {  // the side whose fold tab is under p, or ""
-        if (p.y >= tabS || hidePanels) return ""
-        if (panelOnL && p.x < tabS) return "left"
-        if (panelOnR && p.x >= view.width - tabS) return "right"
+        if (p.y >= tabS) return ""
+        if (panelOnL && p.x < tabS && !tabHidden("left")) return "left"
+        if (panelOnR && p.x >= view.width - tabS && !tabHidden("right")) return "right"
         return ""
     }
     function inPanel(p) { return panelAt(p) !== "" }
@@ -360,6 +364,7 @@ Window {
     }
     function fold(s) {
         if (s === "right") panelOpenR = !panelOpenR; else panelOpen = !panelOpen
+        if (panelShow === "hover" && !sideOpen(s)) setPeek(s, true)   // just folded under the pen: its button stays a moment
         act("panel " + s + " " + (sideOpen(s) ? 1 : 0))
     }
     // Returns what was pressed: -2 for the fold tab, a button index, or -1.
@@ -412,15 +417,15 @@ Window {
             if (gMode !== "" && gMode !== "dead") { endGesture(); sendTouch() }  // the pen came back: a hand on the screen is a palm
         }
         var p = view.mapFromItem(win.contentItem, px, py)
-        if (hidePanels && mode === "ink") peekPen(p, touching, inRange)
+        if (panelShow === "hover" && mode === "ink") peekPen(p, touching, inRange)
         if (stripPen || (touching && inStrip(p))) {  // the mask strip takes the pen; so does the PC
             endStroke()
             if (touching && !stripPen) { stripPen = true; stripPick(p) }
             if (!touching) stripPen = false
             return
         }
-        // a hiding panel: never the pen with "tap", and with "hover" only a touch that starts on it
-        if (penBtn !== -1 || (touching && inPanel(p) && (!hidePanels || (panelShow === "hover" && !penDown)))) {
+        // "tap": the pen never presses the panel, it draws through it
+        if (penBtn !== -1 || (touching && inPanel(p) && panelShow !== "tap")) {
             // the panel takes the pen; the PC ignores the pen over the panel too
             endStroke()
             if (touching && penBtn === -1) { penBtn = pressAt(p); if (penBtn === -1) penBtn = 99 }
@@ -910,8 +915,7 @@ Window {
             readonly property string side: modelData
             readonly property bool main: side === win.mainSide   // has the gestures button and the light bar
             readonly property int first: side === "right" ? 16 : 0
-            visible: (side === "right" ? win.panelOnR && win.panelOpenR : win.panelOnL && win.panelOpen)
-                     && (!win.hidePanels || win.peeked(side))
+            visible: side === "right" ? win.panelOnR && win.panelOpenR : win.panelOnL && win.panelOpen
             x: win.sideX(side); width: win.panelPx; height: view.height
             Rectangle { anchors.fill: parent; color: "white" }
             Rectangle { x: panel.side === "right" ? 0 : parent.width - 3; width: 3; height: parent.height; color: "black" }
@@ -1035,7 +1039,7 @@ Window {
             id: ftab
             readonly property string side: modelData
             readonly property bool hot: win.penBtn === (side === "right" ? -6 : -2)
-            visible: (side === "right" ? win.panelOnR : win.panelOnL) && !win.hidePanels
+            visible: (side === "right" ? win.panelOnR : win.panelOnL) && !win.tabHidden(side)
             x: side === "right" ? view.width - win.tabS : 0; y: 0
             width: win.tabS; height: win.tabS
             color: hot ? "black" : "white"; border.width: 3; border.color: "black"
@@ -1078,14 +1082,6 @@ Window {
                         win.stripPick(p)
                         continue
                     }
-                    var zn = win.hidePanels ? win.zoneAt(p) : ""
-                    if (zn !== "" && !win.peeked(zn) && Object.keys(win.gPts).length === 0 && pts.length === 1) {
-                        // a lone finger on a hiding panel brings it up; the next tap presses
-                        var tbp = win.touchBtn; tbp[t.pointId] = -1; win.touchBtn = tbp
-                        win.setPeek(zn, true, 4000)
-                        continue
-                    }
-                    if (zn !== "" && win.peeked(zn)) win.setPeek(zn, true, 4000)   // still in use: stays up
                     if (win.inPanel(p)) {  // the panel answers even with the pen hovering: the other hand taps it
                         var tb = win.touchBtn; tb[t.pointId] = win.pressAt(p); win.touchBtn = tb
                         continue
