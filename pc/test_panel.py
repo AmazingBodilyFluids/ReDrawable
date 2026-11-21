@@ -510,6 +510,21 @@ class PanelGeometry(unittest.TestCase):
         self.assertFalse(e.over_panel(self.pen(0.02, 0.5)))
         self.assertFalse(e.over_panel(self.pen(0.1, 0.02)))
 
+    def test_hiding_panel_keeps_nothing_until_it_is_up(self):
+        f = core.PANEL_PX / 2160
+        e = self.engine(panel="left", panel_open=False, panel_show="hover")
+        self.assertEqual(e.panel_frac(), 0)
+        self.assertEqual(e.effective_area(), list(core.DEFAULTS["area"]))
+        self.assertFalse(e.over_panel(self.pen(f / 2, 0.5)))   # hidden: the pen draws there
+        self.assertFalse(e.over_panel(self.pen(0.02, 0.02)))   # and no fold tab
+        e.tablet_action("peek 1 0")
+        self.assertTrue(e.over_panel(self.pen(f / 2, 0.5)))    # up: the pen works its buttons
+        e.tablet_action("peek 0 0")
+        self.assertFalse(e.over_panel(self.pen(f / 2, 0.5)))
+        e.cfg["panel_show"] = "tap"
+        e.tablet_action("peek 1 0")
+        self.assertFalse(e.over_panel(self.pen(f / 2, 0.5)))   # "tap": never the pen
+
     def test_right_panel_tab_is_top_right(self):
         e = self.engine(panel="right", panel_open_right=False)
         self.assertTrue(e.over_panel(self.pen(0.99, 0.02)))

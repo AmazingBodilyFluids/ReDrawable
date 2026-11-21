@@ -1540,7 +1540,8 @@ const Panel = {
     this.geo = g;
     const px = v => (v * k).toFixed(1) + "px";
     const FOOT = foot(), cw = W / 2, ch = (vh - this.HEAD - FOOT) / this.ROWS;
-    const open = (right ? S.cfg.panel_open_right : S.cfg.panel_open) !== false;
+    const hides = S.cfg.panel_show === "hover" || S.cfg.panel_show === "tap";
+    const open = hides || (right ? S.cfg.panel_open_right : S.cfg.panel_open) !== false;
     // like the tablet's Text.HorizontalFit: shrink long text to the button, down to a minimum
     const fit = (t, size, min, em) => Math.max(min, Math.min(size, (cw - 28) / (Math.max(1, String(t).length) * em)));
     let cells = "";
@@ -1566,9 +1567,10 @@ const Panel = {
     const tab = `<div class="pm-tab" title="Folds the panel away" style="${right ? "right:0" : "left:0"};width:${px(T)};height:${px(T)};border-width:${px(3)}">${chev}</div>`;
     const ov = $(".pm-ov", wrap);
     Object.assign(ov.style, { left: g.ox + "px", top: g.oy + "px", width: vw * k + "px", height: vh * k + "px" });
-    ov.innerHTML = `${open && here ? panel : ""}${here ? tab : ""}`;
+    ov.innerHTML = `${open && here ? panel : ""}${here && !hides ? tab : ""}`;
     Duck.draw();
     $("#pmNote").textContent = !here ? `${this.side === "right" ? "Right" : "Left"} panel off` :
+      hides ? (S.cfg.panel_show === "tap" ? "Shows on finger tap" : "Shows on pen hover") :
       open ? `${vw} × ${vh} px, panel ${W} wide` : "Panel folded";
     $("#pmNote").dataset.tip = !here ? "Its buttons can still be set. Turn it on under Shortcuts." :
       open ? "" : "Click the corner tab in the picture (or on the tablet) to unfold it and edit its buttons.";
@@ -1766,15 +1768,17 @@ const Scr = {
   layout() {  // as companion_qml.cpp: a panel on either side or both, the strip inside the one on its side
     const [VW, VH] = S.view, c = S.cfg, cal = !!S.calibrating, P = S.panel_px, T = S.tab_px;
     const onL = !cal && (c.panel === "left" || c.panel === "both"), onR = !cal && (c.panel === "right" || c.panel === "both");
-    const openL = c.panel_open !== false, openR = c.panel_open_right !== false;
+    // hiding panels (Show: Pen hover / Finger tap) have no fold tab and keep nothing from the pen
+    const hides = c.panel_show === "hover" || c.panel_show === "tap";
+    const openL = hides || c.panel_open !== false, openR = hides || c.panel_open_right !== false;
     const wL = onL && openL ? P : 0, wR = onR && openR ? P : 0;
     const stripSide = c.mask_side === "left" ? "left" : "right";
     const stripAvail = !cal && c.mask_panel !== false && (c.masks || []).length > 0;
     const stripW = stripAvail && c.mask_strip_open ? S.strip_px : 0;
     const stripOff = stripSide === "left" ? (onL ? (openL ? P : T) : 0) : (onR ? (openR ? P : T) : 0);
-    const resL = stripSide === "left" && stripW ? stripOff + stripW : wL;
-    const resR = stripSide === "right" && stripW ? stripOff + stripW : wR;
-    return { VW, VH, T, P, cal, onL, onR, openL, openR, wL, wR, panelOn: onL || onR,
+    const resL = stripSide === "left" && stripW ? stripOff + stripW : hides ? 0 : wL;
+    const resR = stripSide === "right" && stripW ? stripOff + stripW : hides ? 0 : wR;
+    return { VW, VH, T, P, cal, hides, onL, onR, openL, openR, wL, wR, panelOn: onL || onR,
              main: onL ? "left" : onR ? "right" : "", stripSide, stripAvail, stripW, stripOff,
              stripX: stripSide === "right" ? VW - stripOff - stripW : stripOff,
              stripTabX: stripSide === "right" ? VW - stripOff - T : stripOff,
@@ -1902,8 +1906,8 @@ const Scr = {
       if (side === "left" ? L.wL : L.wR) this.panel(ctx, L, side);
     }
     if (L.stripAvail) this.stripTab(ctx, L);
-    if (L.onL) this.foldTab(ctx, L, "left");
-    if (L.onR) this.foldTab(ctx, L, "right");
+    if (L.onL && !L.hides) this.foldTab(ctx, L, "left");
+    if (L.onR && !L.hides) this.foldTab(ctx, L, "right");
     if (!L.panelOn) {
       ctx.fillStyle = "#000"; ctx.font = `26px ${this.F}`; ctx.textBaseline = "top";
       ctx.fillText("Connected to PC    (power button: back to notebooks)", 30 + L.paperX, 20);
@@ -2195,7 +2199,7 @@ const Scr = {
     for (const side of ["left", "right"]) {
       const on = side === "left" ? L.onL : L.onR, open = side === "left" ? L.openL : L.openR;
       const tx = side === "right" ? L.VW - T : 0;
-      if (on && y < T && x >= tx && x < tx + T) return act(`panel ${side} ${open ? 0 : 1}`);
+      if (on && !L.hides && y < T && x >= tx && x < tx + T) return act(`panel ${side} ${open ? 0 : 1}`);
     }
     if (L.stripAvail && y < T && x >= L.stripTabX && x < L.stripTabX + T) return act(`maskstrip ${c.mask_strip_open ? 0 : 1}`);
     // the open mask strip: Invert, None, a mask, the paper

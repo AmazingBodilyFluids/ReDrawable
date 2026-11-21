@@ -53,6 +53,9 @@ DEFAULTS = {
     "snap": True, "snap_hold_ms": 600, "snap_apps": ", ".join(shapes.DRAWING_APPS),
     # tablet-screen side panels with shortcut buttons: left | right | both | off; each folds on its own
     "panel": "left", "panel_open": True, "panel_open_right": True, "gestures": True,
+    # when the panel buttons show: always (they keep their strip) | hover (the pen hovers there a
+    # moment) | tap (a finger taps there; the pen never presses them). Hidden, the pen draws under them.
+    "panel_show": "always",
     # touch contacts bigger than this are a palm; 0 = off. In Qt's units, about 0.75 x the panel's raw
     # TOUCH_MAJOR: measured fingertips 6-16 (raw 8-21), resting palm edge 19-49 (raw 25-63)
     "palm_size": 20,
@@ -1000,9 +1003,9 @@ class Engine:
                 self.pmask.set_contrast(self.cfg["mask_contrast"], self.cfg["mask_invert"])
             self.refresh_mapper()
             self.save()
-        if key in ("companion_rot", "panel", "panel_open", "panel_open_right", "mask_panel", "mask_strip_open", "mask_side"):
+        if key in ("companion_rot", "panel", "panel_open", "panel_open_right", "panel_show", "mask_panel", "mask_strip_open", "mask_side"):
             self.refresh_mapper()
-        if key in ("area", "companion_rot", "trail_ms", "output", "snap", "panel", "panel_open", "panel_open_right",
+        if key in ("area", "companion_rot", "trail_ms", "output", "snap", "panel", "panel_open", "panel_open_right", "panel_show",
                    "panel_buttons", "panel_buttons_right", "mask_side", "gestures", "swipe_step", "palm_size", "panel_profiles", "panel_profile",
                    "paper", "paper_mm", "trace_file", "trace_opacity", "trace_scale", "trace_x", "trace_y",
                    "trace_adjust", "mask_on", "mask_invert", "mask_panel", "mask_strip_open",
@@ -1056,12 +1059,18 @@ class Engine:
         return p != "off" if side is None else p in (side, "both")
 
     def panel_open(self, side):
+        if self.panel_hides():
+            return True  # no fold tabs: the hidden panel comes up whole
         return bool(self.cfg.get("panel_open" if side == "left" else "panel_open_right", True))
+
+    def panel_hides(self):
+        """Do the panels stay hidden until the pen hovers (or a finger taps) there?"""
+        return self.cfg.get("panel_show") in ("hover", "tap")
 
     def panel_frac(self, side="left"):
         """Share of the tablet (across, as it sits) the open panel on this side takes, or 0."""
-        if not self.panel_shown(side) or not self.panel_open(side):
-            return 0.0
+        if not self.panel_shown(side) or not self.panel_open(side) or self.panel_hides():
+            return 0.0  # a hiding panel keeps nothing from the pen
         return PANEL_PX / self.view_size()[0]
 
     def strip_side(self):
@@ -1358,7 +1367,12 @@ class Engine:
         y = q * h
         for side in ("left", "right"):
             x = p * w if side == "left" else (1 - p) * w  # view pixels in from this side's edge
-            if self.panel_shown(side):
+            if self.panel_shown(side) and self.panel_hides():
+                # only a panel that is up, and only for "hover": with "tap" the pen never presses it
+                if (self.cfg.get("panel_show") == "hover" and side in getattr(self, "peek", ())
+                        and x < PANEL_PX):
+                    return True
+            elif self.panel_shown(side):
                 if x < (PANEL_PX if self.panel_open(side) else TAB_PX) and (self.panel_open(side) or y < TAB_PX):
                     return True
             if self.strip_avail() and self.strip_side() == side:
@@ -1459,6 +1473,9 @@ class Engine:
                 self.companion.send("toast " + (t["t"] or keys.label(t["keys"])))
         elif name in keys.SHORTCUTS:  # gestures
             self.keys.combo(keys.SHORTCUTS[name])
+        elif name == "peek":  # a hiding panel came up or went: "peek L R" (0|1 each)
+            self.peek = {sd for sd, f in zip(("left", "right"), parts[1:3]) if f == "1"}
+            return
         elif name == "panel":  # a fold tab: "panel left|right 0|1" (older tablet apps: "panel 0|1")
             side, flag = (arg, parts[2]) if len(parts) > 2 else ("left", arg)
             self.set("panel_open" if side == "left" else "panel_open_right", flag == "1")
@@ -1991,6 +2008,8 @@ class Engine:
         shown = self.panel_shown()
         c.send(f"panel {self.cfg.get('panel', 'left') if shown else 'off'} {PANEL_PX / self.view_size()[0]:.4f}")
         c.send(f"panelopen {int(self.panel_open('left'))} {int(self.panel_open('right'))}")
+        self.peek = set()  # the tablet puts hiding panels away on "panelshow"
+        c.send(f"panelshow {self.cfg.get('panel_show', 'always')}")
         c.send(f"gestures {int(bool(self.cfg.get('gestures', True)))} {int(self.cfg.get('swipe_step', 100))} "
                f"{float(self.cfg.get('palm_size', 0))} {int(self.touch_mode() == 'windows')}")
         c.send("buttons " + json.dumps(self.companion_buttons(), separators=(",", ":")))

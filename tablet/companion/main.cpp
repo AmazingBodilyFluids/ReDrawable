@@ -16,6 +16,7 @@
 //   snap W X Y X Y.. replace the current/last stroke with a clean shape (digitizer fractions)
 //   panel left|right|both|off [FRAC]   side panels with shortcut buttons, FRAC of the view width each
 //   panelopen L [R]  which panels are unfolded (left, right)
+//   panelshow always|hover|tap   hiding panels: up while the pen hovers there, or after a finger tap
 //   state pen 0|1 snap 0|1        button states owned by the PC
 //   toast TEXT       short message in the panel
 //   unlatch          show all hold keys released (the PC released them)
