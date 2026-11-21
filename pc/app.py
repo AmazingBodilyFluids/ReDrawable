@@ -30,15 +30,14 @@ import rmtablet as rt  # noqa: E402
 # and it must be in place before any window exists.
 MONITORS = rt.monitors()
 
-# AppImage: its WebKitGTK was patched to start its helper processes from "././/lib/...", a path
-# relative to the working directory, so that has to be the AppImage's usr folder (app.py lives in
+# AppImage: its WebKitGTK was patched to start its helper processes from "usr//lib/...", a path
+# relative to the working directory, so that has to be the AppImage's root (app.py lives in
 # usr/share/redrawable/pc).
-_USR = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
-if os.environ.get("APPIMAGE") or os.environ.get("APPDIR"):
-    print("AppImage usr:", _USR, os.path.isdir(os.path.join(_USR, "lib/x86_64-linux-gnu/webkit2gtk-4.1")), flush=True)
-if os.path.isfile(os.path.join(_USR, "lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess")) and \
-        os.path.isfile(os.path.join(_USR, "share/redrawable/pc/app.py")):
-    os.chdir(_USR)
+_APPROOT = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+if os.path.isfile(os.path.join(_APPROOT, "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess")) and \
+        os.path.isfile(os.path.join(_APPROOT, "usr/share/redrawable/pc/app.py")):
+    os.chdir(_APPROOT)
+    sys.__stderr__.write(f"AppImage: working directory {_APPROOT}\n")
 
 if sys.platform.startswith("linux"):
     # The window's app id on Wayland / class on X11, which launchers and the dock match to the .desktop

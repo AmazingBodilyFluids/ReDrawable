@@ -64,10 +64,10 @@ AppDir:
   # WebKitGTK starts its helper processes (WebKitNetworkProcess, WebKitWebProcess) from a path
   # compiled into the library. GLib spawns them with posix_spawn, which the runtime's path hooks
   # don't see, so the path itself is rewritten to one of the same length relative to the working
-  # directory ("/usr" -> "././"); app.py changes into $APPDIR/usr before the window starts.
+  # directory ("/usr/lib" -> "usr//lib"); app.py changes into $APPDIR before the window starts.
   after_bundle:
-    - sed -i -e 's|/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1|././/lib/x86_64-linux-gnu/webkit2gtk-4.1|g' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
-    - grep -c '././/lib/x86_64-linux-gnu/webkit2gtk-4.1' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
+    - sed -i -e 's|/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1|usr//lib/x86_64-linux-gnu/webkit2gtk-4.1|g' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
+    - grep -c 'usr//lib/x86_64-linux-gnu/webkit2gtk-4.1' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
 
   files:
     include: []

@@ -41,7 +41,8 @@ jobs:
             desktop-file-utils libgdk-pixbuf2.0-dev fakeroot strace squashfs-tools zsync gtk-update-icon-cache
           sudo pip3 install "appimage-builder==1.1.0" "packaging<22"
           appimage-builder --recipe linux/appimage/AppImageBuilder.yml --skip-tests
-          ls -la AppDir/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1 || find AppDir -name 'WebKitNetworkProcess*'
+          ls -la AppDir/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1
+          readelf -l AppDir/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess | grep -i interpreter || true
       - name: Start it once (headless) to catch missing libraries
         run: |
           # a desktop's own graphics drivers (the AppImage uses the host's, like on a real PC)
@@ -56,7 +57,7 @@ jobs:
           EOF
           chmod +x smoke.sh
           xvfb-run -a ./smoke.sh | tee windows.txt
-          tail -n 60 run.log ~/.config/ReDrawable/redrawable.log || true
+          tail -n 60 run.log squashfs-root/usr/share/redrawable/pc/redrawable.log ~/.config/ReDrawable/redrawable.log || true
           grep -q '"ReDrawable": ("redrawable"' windows.txt
       - uses: actions/upload-artifact@v4
         with:
