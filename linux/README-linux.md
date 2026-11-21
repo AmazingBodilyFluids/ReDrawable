@@ -8,7 +8,7 @@ GNOME, KDE, Sway) and for X11. Targets for the first test: **Omarchy** (Arch + H
 ## Install
 
 ```sh
-git clone -b linux-test https://github.com/AmazingBodilyFluids/paper-tablet.git redrawable
+git clone -b claude/project-thread-1exdyu https://github.com/AmazingBodilyFluids/paper-tablet.git redrawable
 cd redrawable
 ./linux/setup.sh
 ```
