@@ -49,6 +49,7 @@ AppDir:
       # (or the CI runner) can't load WebKit at all. The vendor drivers stay the host's (below).
       - libegl1
       - libgl1
+      - libgles2
     exclude:
       - adwaita-icon-theme
       - humanity-icon-theme
