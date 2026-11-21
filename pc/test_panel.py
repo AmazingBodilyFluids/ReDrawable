@@ -82,7 +82,8 @@ class CleanButtons(unittest.TestCase):
 def bare_engine(cfg=None):
     """An Engine without its constructor (no config file, monitors or threads)."""
     e = object.__new__(core.Engine)
-    e.cfg = dict(core.DEFAULTS, **(cfg or {}))
+    # the mask and tracing panels are off by default; these tests are about them, so turn them on
+    e.cfg = {**core.DEFAULTS, "mask_panel": True, "trace_panel": True, **(cfg or {})}
     e.model = core.devices.DEFAULT
     e.sent = []
     e.keys = keys.Keys(send=lambda vk, up, ext=False: e.sent.append((vk, up)))
@@ -596,6 +597,11 @@ class PanelGeometry(unittest.TestCase):
         f = core.PANEL_PX / 2160
         self.assertAlmostEqual(e.panel_frac(), f)
         self.assertTrue(e.over_panel(self.pen(f / 2, 0.5)))
+
+    def test_mask_and_tracing_panels_are_off_by_default(self):
+        self.assertFalse(core.DEFAULTS["mask_panel"])
+        self.assertFalse(core.DEFAULTS["trace_panel"])
+        self.assertNotEqual(core.DEFAULTS["panel"], "off")
 
     def test_mask_button_modes(self):
         e = self.engine(panel="off", mask_side="right", masks=[{"id": "a"}], mask_strip_open=False, mask_show="hover")

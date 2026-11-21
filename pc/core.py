@@ -82,7 +82,7 @@ DEFAULTS = {
     # the mask library: [{"id", "name", "contrast", "mode", "invert"}], one file each (penmask-<id>.bin); the
     # active one is what the pen and the tablet use (mask_contrast / mask_mode / mask_invert mirror it),
     # and the tablet lists them in a strip on the side away from the shortcut panel
-    "masks": None, "mask_active": "", "mask_panel": True,
+    "masks": None, "mask_active": "", "mask_panel": False,  # off until turned on (Ted, 0.12.0)
     # what the desktop preview draws of the pen besides its position: line width by pressure, tilt, hover path
     "view_pressure": True, "view_tilt": True, "view_hover": True,
     "mask_side": "right",      # which side of the tablet the strip is on, inside a panel on that side
@@ -90,7 +90,7 @@ DEFAULTS = {
     # the tracing images: [{"id", "name", "file", "opacity", "scale", "x", "y"}]; the active one is what the
     # tablet shows (trace_file / trace_opacity / trace_scale / trace_x / trace_y mirror it). The tablet
     # picks between them in a panel of its own, like the masks'
-    "traces": None, "trace_active": "", "trace_panel": True, "trace_side": "right",
+    "traces": None, "trace_active": "", "trace_panel": False, "trace_side": "right",
     "trace_strip_open": False, "trace_show": "always",
     "swipe_step": 100,      # three-finger swipe: tablet pixels of drag per undo / redo step (~11 mm)
     "rotate_keys": "r",     # five-finger twist: key held while dragging in a circle (Photoshop R; Krita shift+space)
@@ -1107,7 +1107,7 @@ class Engine:
 
     def strip_avail(self):
         """Is the mask strip there at all (open, or folded to its corner tab)?"""
-        return bool(self.cfg.get("mask_panel", True) and self.cfg.get("masks") and self.companion.running
+        return bool(self.cfg.get("mask_panel", False) and self.cfg.get("masks") and self.companion.running
                     and self.cal is None)
 
     def strip_frac(self):
@@ -1121,7 +1121,7 @@ class Engine:
 
     def trace_avail(self):
         """Is the tracing image panel there at all (open, or folded to its corner tab)?"""
-        return bool(self.cfg.get("trace_panel", True) and self.cfg.get("traces") and self.companion.running
+        return bool(self.cfg.get("trace_panel", False) and self.cfg.get("traces") and self.companion.running
                     and self.cal is None)
 
     # The three kinds of panel: "keys" (shortcuts, one a side), "mask", "trace". A side's panels each

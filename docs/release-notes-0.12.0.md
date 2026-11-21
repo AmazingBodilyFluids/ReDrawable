@@ -23,7 +23,7 @@ On first start, go to *Settings → Pen device → Allow*. It asks for your pass
   - a tray icon
   - Krita's keys as the default panel
   Linux was tested on Omarchy.
-- **Three tablet panels: Shortcuts, Mask and Tracing image.** Each panel has its own corner tab, and they all open in the same place. Opening one folds the others.
+- **Three tablet panels: Shortcuts, Mask and Tracing image.** Each panel has its own corner tab, and they all open in the same place. Opening one folds the others. Mask and Tracing image are off until you turn them on under *Panel & gestures → Mask / Tracing*.
 - **Button setting** for each panel:
   - *Default* works as before.
   - *Pen hover* hides a folded panel's tab until the pen hovers along that edge, so you can draw into the corner. A pen tap on the tab opens the panel.
