@@ -90,6 +90,10 @@ if (-not (Test-Path (Join-Path $PyDir "Scripts\pip.exe"))) {
     if ($LASTEXITCODE) { throw "get-pip failed" }
 }
 Write-Host "Installing pc\requirements.txt..."
+# proxy_tools (pywebview) ships only as a source package: building it needs setuptools, which the
+# embeddable Python lacks (a PC whose pip cache already holds its wheel never noticed)
+& $py -m pip install --no-warn-script-location --disable-pip-version-check setuptools wheel
+if ($LASTEXITCODE) { throw "pip install setuptools failed" }
 & $py -m pip install --no-warn-script-location --disable-pip-version-check -r (Join-Path $Repo "pc\requirements.txt")
 if ($LASTEXITCODE) { throw "pip install failed" }
 & $py -c "import webview, paramiko; print('pywebview', webview.__version__ if hasattr(webview, '__version__') else '?', '/ paramiko', paramiko.__version__)"
