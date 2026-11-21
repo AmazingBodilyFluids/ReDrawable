@@ -69,6 +69,14 @@ AppDir:
     - sed -i -e 's|/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1|usr//lib/x86_64-linux-gnu/webkit2gtk-4.1|g' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
     - grep -c 'usr//lib/x86_64-linux-gnu/webkit2gtk-4.1' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
 
+  # Every program in the AppImage gets the relative interpreter "lib64/ld-linux-x86-64.so.2", which
+  # runtime/default and runtime/compat provide. So that a helper started from the working directory
+  # finds both, each runtime folder gets a link to WebKit's helpers; app.py changes into the one
+  # this process runs on.
+  after_runtime:
+    - for r in default compat; do mkdir -p AppDir/runtime/$r/usr/lib/x86_64-linux-gnu && ln -sfn ../../../../../usr/lib/x86_64-linux-gnu/webkit2gtk-4.1 AppDir/runtime/$r/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1; done
+    - ls -la AppDir/runtime/default/lib64 AppDir/runtime/compat/lib64 AppDir/runtime/default/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/
+
   files:
     include: []
     exclude:
