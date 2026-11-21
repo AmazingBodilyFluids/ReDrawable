@@ -43,6 +43,7 @@ jobs:
           appimage-builder --recipe linux/appimage/AppImageBuilder.yml --skip-tests
           ls -la AppDir/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1
           readelf -l AppDir/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess | grep -i interpreter || true
+          ls -la AppDir/runtime/default AppDir/runtime/compat AppDir/lib64 || true
       - name: Start it once (headless) to catch missing libraries
         run: |
           # a desktop's own graphics drivers (the AppImage uses the host's, like on a real PC)

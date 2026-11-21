@@ -31,13 +31,32 @@ import rmtablet as rt  # noqa: E402
 MONITORS = rt.monitors()
 
 # AppImage: its WebKitGTK was patched to start its helper processes from "usr//lib/...", a path
-# relative to the working directory, so that has to be the AppImage's root (app.py lives in
-# usr/share/redrawable/pc).
-_APPROOT = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
-if os.path.isfile(os.path.join(_APPROOT, "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess")) and \
-        os.path.isfile(os.path.join(_APPROOT, "usr/share/redrawable/pc/app.py")):
-    os.chdir(_APPROOT)
-    sys.__stderr__.write(f"AppImage: working directory {_APPROOT}\n")
+# relative to the working directory. appimage-builder also gives every program in it the relative
+# interpreter "lib64/ld-linux-x86-64.so.2", and posix_spawn (which GLib uses) runs them without the
+# AppImage's exec hooks, so the working directory must hold both: the runtime folder (default or
+# compat, whichever this process runs on) links usr and lib64 next to each other.
+def _appimage_cwd():
+    root = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+    if not os.path.isfile(os.path.join(root, "usr/share/redrawable/pc/app.py")) or \
+            not os.path.isdir(os.path.join(root, "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1")):
+        return None
+    try:
+        maps = open("/proc/self/maps").read()
+    except OSError:
+        maps = ""
+    first = "compat" if os.path.join(root, "runtime", "compat") in maps else "default"
+    for d in (os.path.join(root, "runtime", first), os.path.join(root, "runtime", "default"),
+              os.path.join(root, "runtime", "compat"), root):
+        if os.path.exists(os.path.join(d, "lib64/ld-linux-x86-64.so.2")) and \
+                os.path.isdir(os.path.join(d, "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1")):
+            return d
+    return root
+
+
+_CWD = _appimage_cwd()
+if _CWD:
+    os.chdir(_CWD)
+    sys.__stderr__.write(f"AppImage: working directory {_CWD}\n")
 
 if sys.platform.startswith("linux"):
     # The window's app id on Wayland / class on X11, which launchers and the dock match to the .desktop
