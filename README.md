@@ -1,6 +1,6 @@
 # ReDrawable
-**Turn a reMarkable Paper Pro into a pressure-sensitive pen tablet for Windows.** The reMarkable 2 and 1
-are supported in beta.
+**Turn a reMarkable Paper Pro into a pressure-sensitive pen tablet for Windows.** The Paper Pro Move,
+reMarkable 2 and 1 are supported in beta.
 
 Plug the tablet in with its USB cable and draw in Photoshop, Krita, Clip Studio, Illustrator or any Windows Ink
 app. You get pressure, tilt, hover and the eraser end. The tablet's own screen becomes your drawing surface:
@@ -101,6 +101,8 @@ networks you trust; the cable stays the faster link.
 ## Requirements
 
 - A **reMarkable Paper Pro** with **developer mode** turned on. Tested on software 3.29.
+- Or, in beta and not yet tested on real hardware, a **reMarkable Paper Pro Move** with developer mode turned
+  on, software 3.29.
 - Or, in beta and not yet tested on real hardware, a **reMarkable 2** or **reMarkable 1** on software 3.28 or
   newer. These need no developer mode. They have no front light, so the light controls do nothing there.
 - **Windows 10 (1809 or newer) or Windows 11**, and the USB-C cable.

@@ -268,6 +268,7 @@ class Mapper:
     homography: tuple = None  # point calibration: normalized raw (x, y) -> (u, v)
     correction: dict = None  # 9-point residual mesh on top of the homography
     aspect: float = None  # measured width/height of the calibrated frame
+    panel_aspect: float = 0.75  # the model's panel width/height in portrait (devices.Model.aspect)
     edge_lift: bool = True  # a stroke that leaves the mapped area lifts instead of running along the screen edge
 
     def _norm(self, axis, value):
@@ -279,13 +280,13 @@ class Mapper:
         if self.aspect:
             return self.aspect
         ax, ay = self.absinfo["X"], self.absinfo["Y"]
-        w, h = 3.0, 4.0  # Paper Pro panel is 1620 x 2160
+        w, h = self.panel_aspect, 1.0  # the panel's shape: 3:4 Paper Pro, 9:16 Move
         if ax.get("res") and ay.get("res"):
             rw = (ax["max"] - ax["min"]) / ax["res"]
             rh = (ay["max"] - ay["min"]) / ay["res"]
             # The Paper Pro's Elan driver reports bogus resolutions (2832/2064 -> a 4 x 7 mm
-            # "tablet"), so only trust them when they give a plausible panel shape.
-            if 0.65 <= min(rw, rh) / max(rw, rh) <= 0.85:
+            # "tablet"), so only trust them when they give the panel's shape, give or take.
+            if abs(min(rw, rh) / max(rw, rh) - self.panel_aspect) <= 0.1:
                 w, h = rw, rh
         if self.swap:
             w, h = h, w

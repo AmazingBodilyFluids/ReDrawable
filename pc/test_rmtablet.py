@@ -281,3 +281,51 @@ class OlderModels(unittest.TestCase):
         self.assertEqual((pen["rot"], pen["invert_tilt_y"]), (0, True))
         self.assertEqual(pen["abs"]["X"]["max"], 20967)
 
+
+
+class PaperProMove(unittest.TestCase):
+    """reMarkable Paper Pro Move ("chiappa", beta): 954 x 1696 panel, 16:9, portrait-native Elan pen."""
+    PEN = {"path": "/dev/input/event2", "name": "Elan marker input", "keys": ["TOOL_PEN", "TOOL_RUBBER", "TOUCH"],
+           # ranges as reported for a Move by goMarkableStream; resolutions made up (the Pro's are bogus)
+           "abs": {"X": {"min": 0, "max": 6760, "res": 2832}, "Y": {"min": 0, "max": 11960, "res": 2064},
+                   "PRESSURE": {"min": 0, "max": 4096}, "TILT_X": {"min": -9000, "max": 9000},
+                   "TILT_Y": {"min": -9000, "max": 9000}}}
+
+    def info(self, model="reMarkable Chiappa", dt_model=None):
+        return {"machine": "aarch64", "model": model, "dt_model": dt_model, "input_event_size": 24,
+                "devices": [self.PEN]}
+
+    def test_detects_the_move(self):
+        import devices
+        self.assertEqual(devices.detect(self.info()).key, "chiappa")
+        self.assertEqual(devices.detect(self.info(None, "reMarkable Chiappa")).key, "chiappa")  # device-tree only
+        self.assertEqual(devices.detect(self.info("reMarkable Ferrari")).key, "ferrari")
+        self.assertEqual(devices.detect(self.info(None)).key, "ferrari")  # older helper: no model line
+        m = devices.MODELS["chiappa"]
+        self.assertFalse(m.verified)
+        self.assertTrue(m.developer_mode and m.frontlight)
+        self.assertAlmostEqual(m.aspect, 954 / 1696)
+        self.assertAlmostEqual(m.px_per_mm, 264 / 25.4, delta=0.05)  # 264 ppi
+
+    def test_pen_runs_with_the_panel_like_the_paper_pro(self):
+        pen = rt.pick_pen(self.info())
+        self.assertEqual((pen["rot"], pen["invert_tilt_y"]), (0, True))
+        self.assertEqual((pen["abs"]["X"]["max"], pen["abs"]["Y"]["max"]), (6760, 11960))
+
+    def test_mapping_uses_the_moves_shape(self):
+        import devices
+        pen = rt.pick_pen(self.info())
+        m = rt.Mapper(absinfo=pen["abs"], monitor=(0, 0, 1920, 1080), orientation="landscape-cw", fit="crop",
+                      panel_aspect=devices.MODELS["chiappa"].aspect)
+        self.assertAlmostEqual(m.tablet_aspect(), 954 / 1696, places=3)  # not the Pro's 3:4
+        self.assertAlmostEqual(m.oriented_aspect(), 1696 / 954, places=3)
+        # a 16:9 tablet on a 16:9 monitor: crop fills it with no band cut off, all four corners reach
+        self.assertEqual(m.to_screen(6760, 0), (1919, 1079))
+        self.assertEqual(m.to_screen(0, 11960), (0, 0))
+        self.assertEqual(m.to_screen(3380, 5980), (960, 540))
+
+    def test_paper_pro_shape_unchanged(self):
+        pro = dict(self.PEN, abs=dict(self.PEN["abs"], X={"min": 0, "max": 11180, "res": 2832},
+                                      Y={"min": 0, "max": 15340, "res": 2064}))
+        m = rt.Mapper(absinfo=pro["abs"], monitor=(0, 0, 1920, 1080))
+        self.assertAlmostEqual(m.tablet_aspect(), 0.75)

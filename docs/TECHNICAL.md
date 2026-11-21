@@ -50,6 +50,26 @@ shapes and finger gestures work on the device.
 | No developer mode needed | reMarkable: developer mode "is not relevant for the first two paper tablet generations" | developer.remarkable.com/documentation/developer-mode |
 | Tilt direction, palm-size thresholds, digitizer reach past the screen edge | **Unknown**: needs one session on a real tablet | |
 
+### Paper Pro Move (beta, not yet run on hardware)
+
+Codename `chiappa`. Nobody working on ReDrawable owns one, so nothing below has been run on a Move.
+"Measured by others" means a third-party project reports it from a real Move; we have not checked it.
+
+| Claim | Status | Source |
+|---|---|---|
+| Codename `chiappa` = reMarkable Paper Pro Move | **Primary source** | developer.remarkable.com/documentation/sdk, "Product code names" |
+| 7.3", 1696 x 954 at 264 ppi, 16:9; front light; 1.7 GHz dual-core Cortex-A55, 2 GB RAM; USB-C | **Primary source** | remarkable.com, Paper Pro Move specifications |
+| Panel 91.8 x 163.2 mm | **Worked out** from pixels and ppi, not measured | |
+| 64-bit ARM (Cortex-A55), so the Paper Pro's static `rmpp-pen` helper runs on it | SDK target is `cortexa55-remarkable-linux`; A55 runs the Pro's A53 code (inferred from the Armv8 architecture, not run) | reMarkable's 3.29.1.0 chiappa SDK |
+| Same Qt (6.10.3) and OS (6.0.112) as the Paper Pro SDK; `libqsgepaper.so` exports the same 291 symbols, including `EPScreenModeItem`'s constructor | **Confirmed in the SDK sysroots** (readelf on both 3.29.1.0 SDKs) | same |
+| The Paper Pro's tablet-screen build links against the Move's libraries | **Confirmed in the sysroot**: every library it needs is there and every symbol it imports is defined; it has not been started | same |
+| Model string "reMarkable Chiappa" in `/sys/devices/soc0/machine` or the device-tree model | Measured by others | goMarkableStream (beyondsimulations fork), docs/paper-pro-move.md |
+| Pen X 0–6760, Y 0–11960, running with the panel in portrait like the Paper Pro (no turn) | Measured by others; the app reads the real ranges on every connect anyway | same |
+| Touch lies like the Paper Pro's (no `QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS`) | Measured by others for the Move | same |
+| Elan touch + pen controller (`elants_spi`), front light at `rm_frontlight`, USB network at 10.11.99.1 | Measured by others | gitman-101111/chiappa README |
+| Developer mode (factory reset, root password under Settings > Help > About) as on the Paper Pro | reMarkable's developer-mode page names only the Paper Pro; the Move having it is reported by others | developer.remarkable.com/documentation/developer-mode; gitman-101111/chiappa |
+| Tilt direction (the Pro's mirrored-Y quirk is assumed), palm size, shortcut panel layout on the smaller screen | **Unknown**: needs one session on a real Move | |
+
 ## Tablet screen (companion app)
 
 `tablet/companion/` is a small Qt Quick app built with reMarkable's official Paper Pro SDK (OS 3.28 SDK,

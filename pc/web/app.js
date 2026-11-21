@@ -1047,10 +1047,11 @@ const Wizard = {
   wifiBusy: false,
   wifiMsg: null,
 
-  MODELS: [["ferrari", "Paper Pro"], ["rm2", "reMarkable 2"], ["rm1", "reMarkable 1"]],
-  // Only the Paper Pro needs developer mode (and the reset and backup it brings); the rM1 / rM2
-  // answer on the cable as they are.
-  devMode() { return !S || !S.cfg.model || S.cfg.model === "ferrari"; },
+  MODELS: [["ferrari", "Paper Pro"], ["chiappa", "Paper Pro Move"], ["rm2", "reMarkable 2"], ["rm1", "reMarkable 1"]],
+  // The Paper Pro and the Move need developer mode (and the reset and backup it brings); the
+  // rM1 / rM2 answer on the cable as they are.
+  devMode() { return !S || !S.cfg.model || S.cfg.model === "ferrari" || S.cfg.model === "chiappa"; },
+  beta() { return !!S && !!S.cfg.model && S.cfg.model !== "ferrari"; },
   open() { this.isOpen = true; this.step = 0; this.msg = null; $("#wizard").classList.add("on"); this.render(); },
   close() { this.isOpen = false; $("#wizard").classList.remove("on"); },
 
@@ -1105,7 +1106,7 @@ const Wizard = {
           <path d="M200 68c14-26 24-26 32-10s18 16 32-14" style="stroke:var(--accent2)" stroke-width="2"/></svg></div>
         <div class="pane-title mt">Which tablet?</div>
         <div class="seg mt" id="wzModel">${this.MODELS.map(([k, n]) => `<button data-v="${k}" class="${(S_.cfg.model || "ferrari") === k ? "on" : ""}">${n}</button>`).join("")}</div>
-        ${this.devMode() ? "" : `<p class="hint mt">Support for the ${this.MODELS.find(m => m[0] === S_.cfg.model)[1]} is new and not yet tested on one. If something is off, the pen's direction or the tablet screen, please report it.</p>`}
+        ${!this.beta() ? "" : `<p class="hint mt">Support for the ${this.MODELS.find(m => m[0] === S_.cfg.model)[1]} is new and not yet tested on one. If something is off, the pen's direction or the tablet screen, please report it.</p>`}
         <div class="pane-title mt">You'll need</div>
         <ol class="steps"><li><div>The tablet, charged, and its USB cable</div></li>${this.devMode() ? "<li><div>Your reMarkable account, for the backup</div></li>" : ""}<li><div>About ${this.devMode() ? 15 : 5} minutes</div></li></ol>`;
       case 1: return `
