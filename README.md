@@ -150,7 +150,7 @@ do what they say; *Empty* leaves a gap.
 
 **Gestures** (switch them off on the same page):
 
-| Gesture | Does |
+| Gesture | Action |
 |---|---|
 | 3 fingers, swipe left / right | Undo / redo, one step per stretch of the swipe, live; dragging back takes steps back |
 | 2 fingers, drag | Pan (holds Space and drags, like the hand tool) |
