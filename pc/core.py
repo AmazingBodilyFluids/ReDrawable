@@ -1538,7 +1538,8 @@ class Engine:
                          homography=cal.get("homography"), correction=cal.get("correction"), aspect=cal.get("aspect"),
                          pressure_gamma=float(self.cfg["gamma"]), pressure_threshold=float(self.cfg["threshold"]),
                          area=tuple(self.effective_area()), edge_lift=bool(self.cfg["edge_lift"]),
-                         invert_tilt_y=(self.pen or {}).get("invert_tilt_y", True))
+                         invert_tilt_y=(self.pen or {}).get("invert_tilt_y", True),
+                         panel_aspect=self.model.aspect)
 
     def refresh_mapper(self):
         absinfo = (self.pen or {}).get("abs") or {"X": {"min": 0, "max": 11180}, "Y": {"min": 0, "max": 15340},
