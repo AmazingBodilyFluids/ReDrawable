@@ -1,0 +1,104 @@
+# ReDrawable as an AppImage (beta), built with appimage-builder from Ubuntu 22.04 packages, so it carries
+# its own Python, GTK and WebKitGTK and runs on newer distros (glibc 2.35 or later:
+# Arch / Omarchy, Fedora 36+). Build from the repository root:
+#   appimage-builder --recipe linux/appimage/AppImageBuilder.yml --skip-tests
+# .github/workflows/linux-packages.yml does this in the appimage-builder Docker image.
+#
+# What an AppImage can't do by itself: allow /dev/uinput (the virtual pen). The app asks once, with the
+# desktop's password prompt (Settings -> Pen device -> Allow), or run linux/setup.sh's step 3 by hand.
+version: 1
+
+script:
+  - rm -rf AppDir | true
+  - mkdir -p AppDir/usr/share/redrawable AppDir/usr/share/icons/hicolor/256x256/apps
+  - cp -r pc tablet AppDir/usr/share/redrawable/
+  - rm -rf AppDir/usr/share/redrawable/pc/__pycache__ AppDir/usr/share/redrawable/pc/test_*.py
+  - cp pc/icons/redrawable.png AppDir/usr/share/icons/hicolor/256x256/apps/redrawable.png
+  # built by Ubuntu 22.04's own Python 3.10, the same one that goes into the AppImage
+  - python3 -m pip install --no-cache-dir --target AppDir/usr/lib/python3/dist-packages "pywebview==6.2.1" "paramiko>=3.4"
+
+AppDir:
+  path: ./AppDir
+  app_info:
+    id: io.github.amazingbodilyfluids.ReDrawable
+    name: ReDrawable
+    icon: redrawable
+    version: 0.11.0
+    exec: usr/bin/python3
+    exec_args: "$APPDIR/usr/share/redrawable/pc/app.py $@"
+
+  apt:
+    arch: amd64
+    allow_unauthenticated: false
+    sources:
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ jammy main universe
+        key_url: http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ jammy-updates main universe
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ jammy-security main universe
+    include:
+      - python3
+      - python3-gi
+      - python3-gi-cairo
+      - gir1.2-gtk-3.0
+      - gir1.2-webkit2-4.1
+      - libgdk-pixbuf2.0-0
+      - librsvg2-common
+      - shared-mime-info
+      - gstreamer1.0-plugins-base
+      # glvnd's libEGL / libGL dispatchers: WebKitGTK links libEGL.so.1, and a desktop without it
+      # (or the CI runner) can't load WebKit at all. The vendor drivers stay the host's (below).
+      - libegl1
+      - libgl1
+      - libgles2
+    exclude:
+      - adwaita-icon-theme
+      - humanity-icon-theme
+      - dconf-service
+      - libgl1-mesa-dri    # the host's graphics drivers are used instead
+      - libegl-mesa0
+      - libglx-mesa0
+      - libgbm1
+      - libdrm*
+      - libwayland-*
+      - libx11-*
+
+  # WebKitGTK starts its helper processes (WebKitNetworkProcess, WebKitWebProcess) from a path
+  # compiled into the library. GLib spawns them with posix_spawn, which the runtime's path hooks
+  # don't see, so the path itself is rewritten to one of the same length relative to the working
+  # directory ("/usr/lib" -> "usr//lib"); app.py changes into $APPDIR before the window starts.
+  after_bundle:
+    - sed -i -e 's|/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1|usr//lib/x86_64-linux-gnu/webkit2gtk-4.1|g' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
+    - grep -c 'usr//lib/x86_64-linux-gnu/webkit2gtk-4.1' AppDir/usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0*
+
+  # Every program in the AppImage gets the relative interpreter "lib64/ld-linux-x86-64.so.2", which
+  # runtime/default and runtime/compat provide. So that a helper started from the working directory
+  # finds both, each runtime folder gets a link to WebKit's helpers; app.py changes into the one
+  # this process runs on.
+  after_runtime:
+    - for r in default compat; do mkdir -p AppDir/runtime/$r/usr/lib/x86_64-linux-gnu && ln -sfn ../../../../../usr/lib/x86_64-linux-gnu/webkit2gtk-4.1 AppDir/runtime/$r/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1; done
+    - ls -la AppDir/runtime/default/lib64 AppDir/runtime/compat/lib64 AppDir/runtime/default/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/
+
+  files:
+    include: []
+    exclude:
+      - usr/share/man
+      - usr/share/doc
+      - usr/share/lintian
+      - usr/share/locale
+      - usr/lib/python3/dist-packages/**/__pycache__
+
+  runtime:
+    env:
+      PYTHONHOME: '${APPDIR}/usr'
+      PYTHONPATH: '${APPDIR}/usr/lib/python3.10:${APPDIR}/usr/lib/python3/dist-packages'
+      GI_TYPELIB_PATH: '${APPDIR}/usr/lib/x86_64-linux-gnu/girepository-1.0'
+      GDK_PIXBUF_MODULEDIR: '${APPDIR}/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders'
+      GDK_PIXBUF_MODULE_FILE: '${APPDIR}/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache'
+      GST_PLUGIN_SYSTEM_PATH: '${APPDIR}/usr/lib/x86_64-linux-gnu/gstreamer-1.0'
+      APPDIR_LIBRARY_PATH: '${APPDIR}/usr/lib/x86_64-linux-gnu:${APPDIR}/lib/x86_64-linux-gnu'
+
+AppImage:
+  arch: x86_64
+  file_name: ReDrawable-0.11.0-x86_64.AppImage
+  update-information: None
+  sign-key: None

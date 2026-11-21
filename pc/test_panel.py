@@ -201,7 +201,8 @@ class Profiles(unittest.TestCase):
         mine = core.clean_buttons([{"t": "Mine", "kind": "shortcut", "keys": "m"}])
         e = self.engine({"panel_buttons": mine})
         names = [p["name"] for p in e.cfg["panel_profiles"]]
-        self.assertEqual(names, ["Photoshop"] + [p["name"] for p in core.PRESETS])  # the presets join after it
+        # the presets join after it, except one with the same name (Linux: the default is called Krita too)
+        self.assertEqual(names, [core.DEFAULT_PROFILE] + [p["name"] for p in core.PRESETS if p["name"] != core.DEFAULT_PROFILE])
         self.assertEqual(e.cfg["panel_profiles"][0]["buttons"], mine)
         self.assertEqual(e.buttons()[:core.PANEL_SLOTS], mine)
 
@@ -242,7 +243,8 @@ class Profiles(unittest.TestCase):
     def test_presets_join_existing_profiles_once(self):
         e = self.engine({"panel_profiles": [{"name": "Mine"}, {"name": "art"}], "panel_profile": 1})
         names = [p["name"] for p in e.cfg["panel_profiles"]]
-        self.assertEqual(names, ["Mine", "art", "Photography", "Typography", "Design"])  # "art" is taken: no second Art
+        # "art" is taken: no second Art (Windows presets; Linux has the one Krita preset)
+        self.assertEqual(names, ["Mine", "art"] + [p["name"] for p in core.PRESETS if p["name"] != "Art"])
         self.assertEqual(e.cfg["panel_profile"], 1)  # the one in use stays in use
         e.set("panel_profiles", e.cfg["panel_profiles"][:2])  # deleting presets sticks
         e2 = self.engine(dict(e.cfg))
@@ -559,7 +561,8 @@ class TapGestures(unittest.TestCase):
         sent = []
         e.companion = types.SimpleNamespace(running=True, send=sent.append)
         e.tablet_action("tap 1 3")
-        self.assertEqual([vk for vk, up in e.sent if not up], [0x11, 0x10, 0x12, 0x4E])
+        want = [keys.VK[k] for k in core.DEFAULT_TAPS["1x3"]["keys"].split("+")]  # Ctrl+Shift+Alt+N; Linux: Insert
+        self.assertEqual([vk for vk, up in e.sent if not up], want)
         self.assertEqual(sent, ["toast New layer"])
         e.sent.clear()
         e.tablet_action("tap 2 1")  # unassigned
@@ -577,7 +580,7 @@ class Rotate(unittest.TestCase):
         e = bare_engine()
         self.patch_center()
         e.tablet_action("rotate begin")
-        self.assertEqual(e.keys.held, {"r"})
+        self.assertEqual(e.keys.held, set(core.DEFAULTS["rotate_keys"].split("+")))  # R; Linux: Shift+Space
         self.assertEqual(e.mouse.start, (1000, 300))  # straight above the centre
         e.tablet_action("rotate 90")
         f, x, y = e.moves[-1]
@@ -595,6 +598,19 @@ class Rotate(unittest.TestCase):
         e.tablet_action("rotate begin")
         e.tablet_action("rotate end")
         self.assertEqual(e.keys.held, {"shift"})
+
+    def test_radius_fits_a_small_screen(self):
+        # Omarchy laptop, 1366 x 768: 300 px above Krita's centre (683, 397) landed in its toolbar
+        e = bare_engine()
+        e.monitors = [(0, 0, 1366, 768)]
+        keys_c = keys.foreground_center
+        keys.foreground_center = lambda: (683, 397)
+        self.addCleanup(setattr, keys, "foreground_center", keys_c)
+        e.tablet_action("rotate begin")
+        self.assertEqual(e.mouse.start, (683, 397 - 153))  # a fifth of 768
+        e.tablet_action("rotate end")
+        e.monitors = [(0, 0, 3840, 2160)]
+        self.assertEqual(e.rot_radius(1920, 1080), core.Engine.ROT_RADIUS)  # big screens: as before
 
     def test_stray_rotate_moves_are_ignored(self):
         e = bare_engine()
@@ -765,3 +781,29 @@ class WiFi(unittest.TestCase):
         e = self.engine(via="wifi", connected=False, wifi=True, wifi_host="192.168.0.100")
         with self.assertRaises(PermissionError):
             e.open_tablet()
+
+
+class LinuxKeys(unittest.TestCase):
+    """Settings from the Windows / Photoshop setup: the global rotate and tap keys become Krita's once."""
+    def run_on_linux(self, cfg):
+        old = core.sys.platform
+        core.sys.platform = "linux"
+        try:
+            core.linux_keys(cfg)
+        finally:
+            core.sys.platform = old
+        return cfg
+
+    def test_photoshop_keys_become_krita_once(self):
+        cfg = self.run_on_linux({"rotate_keys": "r", "taps": {"5x2": {"t": "Reset rotation", "keys": "r+esc"},
+                                                                "1x3": {"t": "New layer", "keys": "ctrl+shift+alt+n"},
+                                                                "2x1": {"t": "Save", "keys": "ctrl+s"}}})
+        if core.sys.platform.startswith("linux"):
+            self.assertEqual(cfg["rotate_keys"], "shift+space")
+            self.assertEqual(cfg["taps"]["5x2"]["keys"], "5")
+            self.assertEqual(cfg["taps"]["1x3"]["keys"], "insert")
+        self.assertEqual(cfg["taps"]["2x1"]["keys"], "ctrl+s")  # the user's own: kept
+        self.assertEqual(cfg["linux_keys"], 1)
+        cfg["rotate_keys"] = "r"  # chosen again later: stays
+        self.run_on_linux(cfg)
+        self.assertEqual(cfg["rotate_keys"], "r")

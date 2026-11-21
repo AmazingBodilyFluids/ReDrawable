@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ReDrawable
+Comment=Use a reMarkable tablet as a pressure-sensitive pen tablet
+Exec=redrawable
+Icon=io.github.amazingbodilyfluids.ReDrawable
+Terminal=false
+Categories=Graphics;Utility;
+StartupWMClass=io.github.amazingbodilyfluids.ReDrawable

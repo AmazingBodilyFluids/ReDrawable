@@ -18,7 +18,8 @@ sys.path.insert(0, HERE)
 
 import paths  # noqa: E402
 
-if sys.stderr is None or sys.executable.lower().endswith("pythonw.exe"):
+if (sys.stderr is None or sys.executable.lower().endswith("pythonw.exe")
+        or (sys.platform.startswith("linux") and not sys.stdout.isatty())):  # Linux: started from the app launcher
     # pythonw has no console: keep errors in a log (where: paths.log_dir)
     sys.stderr = sys.stdout = open(os.path.join(paths.log_dir(), "redrawable.log"), "a", buffering=1, encoding="utf-8")
     print(f"--- started {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -29,6 +30,43 @@ import rmtablet as rt  # noqa: E402
 # and it must be in place before any window exists.
 MONITORS = rt.monitors()
 
+# AppImage: its WebKitGTK was patched to start its helper processes from "usr//lib/...", a path
+# relative to the working directory. appimage-builder also gives every program in it the relative
+# interpreter "lib64/ld-linux-x86-64.so.2", and posix_spawn (which GLib uses) runs them without the
+# AppImage's exec hooks, so the working directory must hold both: the runtime folder (default or
+# compat, whichever this process runs on) links usr and lib64 next to each other.
+def _appimage_cwd():
+    root = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
+    if not os.path.isfile(os.path.join(root, "usr/share/redrawable/pc/app.py")) or \
+            not os.path.isdir(os.path.join(root, "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1")):
+        return None
+    try:
+        maps = open("/proc/self/maps").read()
+    except OSError:
+        maps = ""
+    first = "compat" if os.path.join(root, "runtime", "compat") in maps else "default"
+    for d in (os.path.join(root, "runtime", first), os.path.join(root, "runtime", "default"),
+              os.path.join(root, "runtime", "compat"), root):
+        if os.path.exists(os.path.join(d, "lib64/ld-linux-x86-64.so.2")) and \
+                os.path.isdir(os.path.join(d, "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1")):
+            return d
+    return root
+
+
+_CWD = _appimage_cwd()
+if _CWD:
+    os.chdir(_CWD)
+    sys.__stderr__.write(f"AppImage: working directory {_CWD}\n")
+
+if sys.platform.startswith("linux"):
+    # The window's app id on Wayland / class on X11, which launchers and the dock match to the .desktop
+    # file (otherwise it would be "app.py"). Set before GTK starts.
+    try:
+        from gi.repository import GLib
+        GLib.set_prgname(os.environ.get("FLATPAK_ID") or "redrawable")
+        GLib.set_application_name("ReDrawable")
+    except Exception:
+        pass
 import webview  # noqa: E402
 
 import penmask  # noqa: E402
@@ -242,10 +280,21 @@ class Api:
     def restart_onboarding(self):
         self._engine.set("onboarded", False)
 
+    def setup_uinput(self):
+        """Linux: install the uinput rule (password prompt), then try the pen again."""
+        import linuxinput
+        ok, msg = linuxinput.setup_uinput()
+        if ok and self._engine and self._engine.connected and not self._engine.output_on:
+            self._engine.set_output(True)
+        return {"ok": ok, "msg": msg}
+
     def open_calibration_pdf(self):
         path = os.path.normpath(os.path.join(HERE, "..", "tablet", "calibration-landscape.pdf"))
         if sys.platform == "win32":
             os.startfile(os.path.dirname(path))  # noqa: S606 (opens the folder in Explorer)
+        elif sys.platform.startswith("linux"):
+            import subprocess
+            subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return path
 
     def pick_trace_image(self):
@@ -305,7 +354,7 @@ class Api:
     def _to_tray(self):
         """Close button with "close to tray" on: hide instead of quitting. True if it did."""
         if (self._quitting or not self._tray or not self._engine or not self._engine.cfg.get("close_to_tray")
-                or not winextras.user_closing(self._window.native)):
+                or (sys.platform == "win32" and not winextras.user_closing(self._window.native))):
             return False
         self._window.hide()
         if not self._told_tray:
@@ -319,6 +368,17 @@ def already_running():
     """One ReDrawable at a time: two would mean two synthetic pens fighting over the cursor.
     A named mutex says whether another copy owns it; if so, ask it to show its window (it may be
     hidden in the tray), or bring an older copy's window forward."""
+    if sys.platform.startswith("linux"):
+        import fcntl
+        import paths
+        main.lock = open(os.path.join(paths.data_dir(), "running.lock"), "w")  # held until exit
+        try:
+            fcntl.flock(main.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return False
+        except OSError:
+            import linuxtray
+            linuxtray.signal_show()  # it may be hidden in the tray
+            return True
     if sys.platform != "win32":
         return False
     import ctypes
@@ -341,6 +401,17 @@ def already_running():
     return True
 
 
+def splash_wanted():
+    """Windows always. Linux: not on tiling compositors (Hyprland, Sway, i3), which would tile the
+    splash like any other window and shuffle the desktop for a second. REDRAWABLE_SPLASH=1 / 0 overrides."""
+    force = os.environ.get("REDRAWABLE_SPLASH")
+    if force in ("0", "1"):
+        return force == "1"
+    if sys.platform == "win32":
+        return True
+    return not any(os.environ.get(v) for v in ("HYPRLAND_INSTANCE_SIGNATURE", "SWAYSOCK", "I3SOCK"))
+
+
 def main():
     if already_running():
         print("ReDrawable is already running; brought it to the front.", flush=True)
@@ -350,7 +421,8 @@ def main():
     # The splash is one object on the bare desktop (web/splash.html). On Windows its window is transparent
     # and the exact size and place of the main window, so the object can grow into it; elsewhere, where
     # see-through windows depend on the desktop, it stays the small themed window.
-    clear = sys.platform == "win32"
+    use_splash = splash_wanted()
+    clear = sys.platform == "win32" and use_splash
     start_js = "start(%s)" % json.dumps({"theme": theme, "opaque": not clear})
     if clear:
         splash = webview.create_window(SPLASH_TITLE, os.path.join(HERE, "web", "splash.html"),
@@ -375,15 +447,17 @@ def main():
         if hasattr(splash.events, "before_show"):
             splash.events.before_show += lambda: setattr(splash, "transparent", False)
         splash.events.loaded += lambda: threading.Thread(target=show_splash, daemon=True).start()
-    else:
+    elif use_splash:
         splash = webview.create_window(SPLASH_TITLE, os.path.join(HERE, "web", "splash.html"),
                                        width=560, height=340, frameless=True, easy_drag=False,
                                        on_top=True, background_color=THEME_BG[theme], resizable=False)
         splash.events.loaded += lambda: splash.evaluate_js(start_js)
+    else:
+        splash = None
     window = webview.create_window(MAIN_TITLE, os.path.join(HERE, "web", "index.html"), js_api=api,
                                    width=1240, height=820, min_size=(900, 600),
                                    frameless=True, easy_drag=False, hidden=True, background_color=THEME_BG[theme])
-    if not clear:
+    if splash and not clear:
         splash.events.shown += lambda: place_window(SPLASH_TITLE, 560, 340)
     api._window = window
     t0 = time.time()
@@ -409,6 +483,23 @@ def main():
             import ctypes
             api._resizer.hwnd = ctypes.windll.user32.FindWindowW(None, MAIN_TITLE)
 
+    def start_linux_tray():
+        import linuxtray
+        try:  # a second start shows this window, tray or not
+            linuxtray.listen_for_show(lambda: (api._tray.show_window() if api._tray else (
+                setattr(window, "hidden", False), window.show())))
+        except OSError as ex:
+            print("show signal:", repr(ex), flush=True)
+        why = linuxtray.available()
+        if why:  # closing the window then quits, as there is nowhere to bring it back from
+            print("no tray icon:", why, flush=True)
+            return
+        try:
+            api._tray = linuxtray.Tray(window, on_open=lambda: api._tray.show_window(),
+                                       on_toggle=api._toggle_pen, on_exit=api._exit)
+        except Exception as ex:
+            print("tray icon failed:", repr(ex), flush=True)
+
     def boot():
         try:
             api._engine = Engine(on_change=notify)
@@ -427,14 +518,19 @@ def main():
                     return
                 time.sleep(0.05)
 
-        splash_says("splashDone", t0 + SPLASH_MAX_S)
-        time.sleep(0.35)  # a beat on the finished logo
-        try:
-            splash.evaluate_js("handoff()")
-            splash_says("splashCovered", time.time() + 1.5)
-        except Exception:
-            pass
+        if splash:
+            splash_says("splashDone", t0 + SPLASH_MAX_S)
+            time.sleep(0.35)  # a beat on the finished logo
+            try:
+                splash.evaluate_js("handoff()")
+                splash_says("splashCovered", time.time() + 1.5)
+            except Exception:
+                pass
         place_window(MAIN_TITLE, 1240, 820)  # while still hidden, so it never shows at the wrong size
+        if sys.platform != "win32":
+            # pywebview's GTK show() hides the window again at once while its hidden flag is still set
+            # (gtk.main_level() is 0 under Gtk.Application, checked with pywebview 6.2.1)
+            window.hidden = False
         window.show()
         place_window(MAIN_TITLE, 1240, 820)
         if clear:  # the main window is now under the splash's field, the same size: fade the field away
@@ -446,9 +542,12 @@ def main():
                 pass
         if sys.platform == "win32":
             start_tray()
+        elif sys.platform.startswith("linux"):
+            start_linux_tray()
         notify()
         try:
-            splash.destroy()
+            if splash:
+                splash.destroy()
         except Exception:
             pass
 

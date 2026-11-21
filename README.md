@@ -104,6 +104,8 @@ networks you trust; the cable stays the faster link.
 - Or, in beta and not yet tested on real hardware, a **reMarkable 2** or **reMarkable 1** on software 3.28 or
   newer. These need no developer mode. They have no front light, so the light controls do nothing there.
 - **Windows 10 (1809 or newer) or Windows 11**, and the USB-C cable.
+- **Linux (beta, being tested):** Wayland or X11, set up from source with `linux/setup.sh`. See
+  [linux/README-linux.md](linux/README-linux.md).
 - The installer and portable version bring everything else with them. Running from source needs Python 3.10+.
 
 
@@ -186,7 +188,7 @@ removing exactly one stroke, it only works in the drawing programs listed under 
 
 ## Building
 
-- **Run the tests:** `cd pc && python -m unittest test_shapes test_rmtablet test_panel`.
+- **Run the tests:** `cd pc && python -m unittest test_shapes test_rmtablet test_panel test_linux`.
 - **The tablet programs** are built with reMarkable's official SDK
   (`SDK=/path/to/sdk tablet/companion/build.sh`). Prebuilt binaries are in the repo.
 - **The installer and portable zip** are built with the scripts in `installer/` (embedded Python + Inno Setup).

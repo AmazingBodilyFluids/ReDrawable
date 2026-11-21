@@ -60,7 +60,9 @@ def log_dir():
     if portable():
         return data_dir()
     if os.path.exists(os.path.join(ROOT, "installed")) or not os.access(PC, os.W_OK):
-        base = os.environ.get("LOCALAPPDATA") or data_dir()
+        base = os.environ.get("LOCALAPPDATA")
+        if not base:  # Linux (AppImage, Flatpak): with the settings
+            return data_dir()
         d = os.path.join(base, "ReDrawable")
         os.makedirs(d, exist_ok=True)
         return d

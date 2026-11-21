@@ -177,6 +177,32 @@ DEFAULT_TAPS = {"1x2": {"t": "", "keys": ""}, "1x3": {"t": "New layer", "keys": 
                 "2x1": {"t": "", "keys": ""}, "2x2": {"t": "", "keys": ""}, "3x1": {"t": "", "keys": ""},
                 "5x2": {"t": "Reset rotation", "keys": "r+esc"}}
 DEFAULTS["taps"] = DEFAULT_TAPS
+
+# Linux: Krita is the drawing app to expect, so the defaults and the built-in preset use Krita's own keys.
+# Checked against Krita's source (github.com/KDE/krita, master, 2026-11-21): krita/krita.action and
+# krita/kritamenu.action (menu actions), the tool factories' setShortcut() (B brush, T move, F fill,
+# G gradient, P colour sampler, Ctrl+T transform, Ctrl+R rectangle select) and
+# krita/data/input/kritadefault.profile (canvas input: Space+drag pan, Shift+Space+drag rotate,
+# 5 reset rotation, 1 zoom 100 %, 2 fit to view, Ctrl+click samples the colour).
+# Krita has no default key for the freehand lasso; Ctrl+0 is 100 %, not fit.
+DEFAULT_PROFILE = "Photoshop"
+if sys.platform.startswith("linux"):
+    DEFAULT_PROFILE = "Krita"  # the default layout is the Krita preset, so the preset is not added twice
+    KRITA_LEFT = [_b("Undo", "ctrl+z"), _b("Redo", "ctrl+shift+z"), _b("Size -", "["), _b("Size +", "]"),
+                  _b("Brush", "b"), _b("Eraser", "e"), _b("Hand", "space", "hold"), _b("Pick", "ctrl", "hold"),
+                  _b("Shift", "shift", "hold"), _b("Mirror", "m"), _b("Zoom -", "ctrl+-"), _b("Zoom +", "ctrl+="),
+                  _b("Fit", "2"), _b("Shapes", kind="snap"), _b("Pen", kind="pen"), _b("Save", "ctrl+s")]
+    KRITA_RIGHT = [_b("Move", "t"), _b("Transform", "ctrl+t"), _b("Rect sel", "ctrl+r"), _b("Deselect", "ctrl+shift+a"),
+                   _b("Select all", "ctrl+a"), _b("Invert sel", "ctrl+shift+i"), _b("New layer", "insert"), _b("Duplicate", "ctrl+j"),
+                   _b("Merge down", "ctrl+e"), _b("Group", "ctrl+g"), _b("Swap col", "x"), _b("Reset col", "d"),
+                   _b("Fill", "f"), _b("Rotate", "shift+space", "hold"), _b("Move image", kind="trace"), _b("Light", kind="light")]
+    DEFAULT_BUTTONS[:] = [dict(b) for b in KRITA_LEFT]
+    DEFAULT_BUTTONS_RIGHT[:] = [dict(b) for b in KRITA_RIGHT]
+    OLD_DEFAULT_BUTTONS = DEFAULT_BUTTONS[:-1] + [{"t": "Clear", "kind": "clear", "keys": ""}]
+    PRESETS = [{"name": "Krita", "buttons": KRITA_LEFT, "buttons_right": KRITA_RIGHT}]
+    DEFAULT_TAPS["1x3"]["keys"] = "insert"   # Krita: Insert = new paint layer
+    DEFAULT_TAPS["5x2"]["keys"] = "5"        # Krita: 5 = reset canvas rotation
+    DEFAULTS["rotate_keys"] = "shift+space"
 MASK_KEYS = {"mask_contrast": "contrast", "mask_mode": "mode", "mask_invert": "invert", "mask_strength": "strength"}  # cfg -> the active mask's entry
 BUTTON_KINDS = ("shortcut", "hold", "pen", "snap", "clear", "trace", "light", "mask", "none")
 MASK_N = penmask.N
@@ -204,9 +230,9 @@ def clean_profiles(profiles, current=None):
     if out:
         return out
     if current:  # settings from before profiles: that layout comes first
-        out.append({"name": "Photoshop", "buttons": clean_buttons(current),
+        out.append({"name": DEFAULT_PROFILE, "buttons": clean_buttons(current),
                     "buttons_right": clean_buttons(DEFAULT_BUTTONS_RIGHT), "touch": "shortcuts"})
-    return out + preset_profiles()
+    return out + preset_profiles(p["name"] for p in out)
 
 
 def preset_profiles(skip=()):
@@ -245,6 +271,28 @@ def clean_buttons(btns):
     while len(out) < PANEL_SLOTS:
         out.append({"t": "", "kind": "none", "keys": ""})
     return out
+
+
+# Photoshop's keys, the Windows defaults, for the settings that are not part of a profile
+PHOTOSHOP_GLOBAL = {"rotate_keys": "r", "1x3": "ctrl+shift+alt+n", "5x2": "r+esc"}
+
+
+def linux_keys(cfg):
+    """Settings carried over from Windows (or a Paper Tablet test build) keep Photoshop's rotate key
+    and tap keys, which are global, not per profile. On Linux they become Krita's once; anything
+    the user changed stays."""
+    if not sys.platform.startswith("linux") or cfg.get("linux_keys"):
+        return
+    cfg["linux_keys"] = 1
+    if cfg.get("rotate_keys") in ("", None, PHOTOSHOP_GLOBAL["rotate_keys"]):
+        cfg["rotate_keys"] = DEFAULTS["rotate_keys"]
+    if isinstance(cfg.get("taps"), dict):
+        taps = {k: dict(v) if isinstance(v, dict) else v for k, v in cfg["taps"].items()}
+        for slot in ("1x3", "5x2"):
+            t = taps.get(slot)
+            if isinstance(t, dict) and str(t.get("keys") or "").lower().replace(" ", "") == PHOTOSHOP_GLOBAL[slot]:
+                t["keys"] = DEFAULT_TAPS[slot]["keys"]
+        cfg["taps"] = taps
 
 
 def clean_taps(taps):
@@ -539,6 +587,14 @@ class Companion:
         if line.startswith("ACT:"):
             self.engine.tablet_action(line[4:].strip())
             return
+        if "has fallen behind" in line:  # the e-paper driver's own warning, many per second while drawing
+            now = time.time()
+            self.behind_n = getattr(self, "behind_n", 0) + 1
+            if now - getattr(self, "behind_at", 0) < 60:
+                return
+            if self.behind_n > 1:
+                line += f"  ({self.behind_n - 1} more like this in the last minute)"
+            self.behind_at, self.behind_n = now, 0
         self.log.append(line)
         print("tablet screen:", line, flush=True)
         if "first frame drawn" in line:
@@ -728,6 +784,7 @@ class Engine:
         if self.cfg.get("panel_buttons") == OLD_DEFAULT_BUTTONS:
             self.cfg["panel_buttons"] = DEFAULT_BUTTONS
         load_profiles(self.cfg)
+        linux_keys(self.cfg)
         if "mask_side" not in saved.get("gui", {}):  # it used to sit opposite the one panel
             self.cfg["mask_side"] = "left" if self.cfg.get("panel") == "right" else "right"
         if self.cfg.get("palm_size") == 28:  # first guess, in raw units; Qt reports ~0.75 of that
@@ -761,7 +818,7 @@ class Engine:
         self.peak = 0
         self.snap_last = None  # last snap or skip, for the UI
         self.keys = keys.Keys()
-        self.mouse = keys.Mouse()
+        self.mouse = keys.make_mouse()
         self.pan_space = False
         self.last_action = None
         self.touch = None       # the latest finger report from the tablet, for the live view
@@ -828,6 +885,9 @@ class Engine:
             "snap_last": self.snap_last, "last_action": self.last_action, "held_keys": sorted(self.keys.held),
             "view": self.view_size(), "panel_px": PANEL_PX, "tab_px": TAB_PX,
             "key_names": sorted(keys.VK), "key_labels": keys.LABEL, "default_buttons": DEFAULT_BUTTONS,
+            "os": "linux" if sys.platform.startswith("linux") else "windows" if sys.platform == "win32" else sys.platform,
+            "session": os.environ.get("XDG_SESSION_TYPE", "") if sys.platform.startswith("linux") else "",
+            "uinput_ok": __import__("linuxinput").available() if sys.platform.startswith("linux") else True,
             "default_buttons_right": DEFAULT_BUTTONS_RIGHT, "presets": {p["name"]: {"left": p["buttons"], "right": p["buttons_right"]} for p in PRESETS},
             "pen_rate": self.rate.last, "mask_ver": self.pmask.ver, "mask_pct": round(100 * self.pmask.coverage()),
             "gesture_list": self.gesture_list(), "trace_key": self.trace_key(), "mask_vers": {k: m.ver for k, m in self.masks.items()},
@@ -979,7 +1039,9 @@ class Engine:
 
     def mask_thumbs(self):
         """Each mask's thumbnail for the tablet's mask strip, as data URLs by mask id."""
-        return {k: "data:image/png;base64," + base64.b64encode(m.thumb()).decode("ascii") for k, m in self.masks.items()}
+        # list(): masks are added and removed from the UI thread while this runs on another
+        return {k: "data:image/png;base64," + base64.b64encode(m.thumb()).decode("ascii")
+                for k, m in list(self.masks.items())}
 
     def view_size(self):
         """The tablet screen as it sits on the desk, in panel pixels (width, height)."""
@@ -1319,7 +1381,7 @@ class Engine:
         if not self.cfg.get("gestures", True):
             return []
         if self.touch_mode() == "windows":
-            rows = [["One finger", "Touch in Windows"], ["Two fingers", "Scroll, pinch to zoom"]]
+            rows = [["One finger", "Touch on the desktop" if sys.platform.startswith("linux") else "Touch in Windows"], ["Two fingers", "Scroll, pinch to zoom"]]
         else:
             rows = [["3 fingers, swipe left", "Undo"], ["3 fingers, swipe right", "Redo"],
                     ["2 fingers, drag", "Pan the canvas"], ["2 fingers, pinch", "Zoom"]]
@@ -1466,7 +1528,15 @@ class Engine:
             sx, sy = self.pan_scale()
             self.mouse.move(int(round(dx * sx)), int(round(dy * sy)))
 
-    ROT_RADIUS = 300  # screen pixels from the window centre to where the rotate drag runs
+    ROT_RADIUS = 300  # most screen pixels from the window centre to where the rotate drag runs
+
+    def rot_radius(self, cx, cy):
+        """The drag runs a fifth of the screen's short side above the centre (at most ROT_RADIUS):
+        a fixed 300 px reached the menus and toolbars on a 768 px tall screen."""
+        for l, t, r, b in getattr(self, "monitors", None) or []:
+            if l <= cx < r and t <= cy < b:
+                return int(max(60, min(self.ROT_RADIUS, 0.2 * min(r - l, b - t))))
+        return self.ROT_RADIUS
 
     def rotate(self, args):
         """Five-finger twist: hold the rotate key and drag around the window centre by the same
@@ -1486,7 +1556,8 @@ class Engine:
             self.rot_back = self.mouse._cursor()
             self.rot_c = keys.foreground_center()
             cx, cy = self.rot_c
-            self.mouse.begin_at(cx, cy - self.ROT_RADIUS)
+            self.rot_r = self.rot_radius(cx, cy)
+            self.mouse.begin_at(cx, cy - self.rot_r)
         elif args[0] == "end":
             if getattr(self, "rot_c", None) is None:
                 return
@@ -1505,7 +1576,8 @@ class Engine:
             except ValueError:
                 return
             cx, cy = self.rot_c
-            x, y = cx + self.ROT_RADIUS * math.cos(a), cy + self.ROT_RADIUS * math.sin(a)
+            r = getattr(self, "rot_r", self.ROT_RADIUS)
+            x, y = cx + r * math.cos(a), cy + r * math.sin(a)
             sx, sy = self.mouse.start
             self.mouse.move(int(round(x - sx)), int(round(y - sy)))
 
@@ -1807,6 +1879,19 @@ class Engine:
         return self.cal is not None and not self.companion.running
 
     def make_pen(self):
+        if sys.platform.startswith("linux"):
+            import linuxinput
+            if not linuxinput.available():
+                self.output_on = False
+                self.set_status("error", "No access to /dev/uinput, so the pen can't be created. "
+                                "Settings → Pen device → Allow (asks for your password once).")
+                return None
+            try:
+                return linuxinput.LinuxPen()
+            except Exception as ex:
+                self.output_on = False
+                self.set_status("error", f"Couldn't create the virtual pen: {ex}")
+                return None
         if sys.platform != "win32":
             return NullPen()
         try:
@@ -2057,9 +2142,13 @@ class Engine:
             return
         if self.touch_out is None:
             try:
-                self.touch_out = rt.WindowsTouch() if sys.platform == "win32" else None
+                if sys.platform == "win32":
+                    self.touch_out = rt.WindowsTouch()
+                else:
+                    import linuxinput
+                    self.touch_out = linuxinput.LinuxTouch()
             except OSError as ex:
-                self.set_status("error", f"Windows touch isn't available: {ex}")
+                self.set_status("error", f"Touch input isn't available: {ex}")
                 return
         if self.touch_out:
             self.touch_out.update({cid: self.mapper.frac_to_screen(p, q) for cid, p, q in pts} if live else {})
