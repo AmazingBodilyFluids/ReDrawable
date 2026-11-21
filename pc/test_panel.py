@@ -201,7 +201,8 @@ class Profiles(unittest.TestCase):
         mine = core.clean_buttons([{"t": "Mine", "kind": "shortcut", "keys": "m"}])
         e = self.engine({"panel_buttons": mine})
         names = [p["name"] for p in e.cfg["panel_profiles"]]
-        self.assertEqual(names, ["Photoshop"] + [p["name"] for p in core.PRESETS])  # the presets join after it
+        # the presets join after it, except one with the same name (Linux: the default is called Krita too)
+        self.assertEqual(names, [core.DEFAULT_PROFILE] + [p["name"] for p in core.PRESETS if p["name"] != core.DEFAULT_PROFILE])
         self.assertEqual(e.cfg["panel_profiles"][0]["buttons"], mine)
         self.assertEqual(e.buttons()[:core.PANEL_SLOTS], mine)
 
@@ -242,7 +243,8 @@ class Profiles(unittest.TestCase):
     def test_presets_join_existing_profiles_once(self):
         e = self.engine({"panel_profiles": [{"name": "Mine"}, {"name": "art"}], "panel_profile": 1})
         names = [p["name"] for p in e.cfg["panel_profiles"]]
-        self.assertEqual(names, ["Mine", "art", "Photography", "Typography", "Design"])  # "art" is taken: no second Art
+        # "art" is taken: no second Art (Windows presets; Linux has the one Krita preset)
+        self.assertEqual(names, ["Mine", "art"] + [p["name"] for p in core.PRESETS if p["name"] != "Art"])
         self.assertEqual(e.cfg["panel_profile"], 1)  # the one in use stays in use
         e.set("panel_profiles", e.cfg["panel_profiles"][:2])  # deleting presets sticks
         e2 = self.engine(dict(e.cfg))
@@ -559,7 +561,8 @@ class TapGestures(unittest.TestCase):
         sent = []
         e.companion = types.SimpleNamespace(running=True, send=sent.append)
         e.tablet_action("tap 1 3")
-        self.assertEqual([vk for vk, up in e.sent if not up], [0x11, 0x10, 0x12, 0x4E])
+        want = [keys.VK[k] for k in core.DEFAULT_TAPS["1x3"]["keys"].split("+")]  # Ctrl+Shift+Alt+N; Linux: Insert
+        self.assertEqual([vk for vk, up in e.sent if not up], want)
         self.assertEqual(sent, ["toast New layer"])
         e.sent.clear()
         e.tablet_action("tap 2 1")  # unassigned
@@ -577,7 +580,7 @@ class Rotate(unittest.TestCase):
         e = bare_engine()
         self.patch_center()
         e.tablet_action("rotate begin")
-        self.assertEqual(e.keys.held, {"r"})
+        self.assertEqual(e.keys.held, set(core.DEFAULTS["rotate_keys"].split("+")))  # R; Linux: Shift+Space
         self.assertEqual(e.mouse.start, (1000, 300))  # straight above the centre
         e.tablet_action("rotate 90")
         f, x, y = e.moves[-1]

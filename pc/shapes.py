@@ -8,6 +8,7 @@ app (Ctrl+Z) and draws the clean shape as a new pen stroke with the stroke's own
 No numpy: strokes are a few hundred points.
 """
 import math
+import sys
 import time
 
 import rmtablet
@@ -398,11 +399,19 @@ def recognize(stroke, step=1.0):
 DRAWING_APPS = ("photoshop", "krita", "clipstudiopaint", "illustrator", "mspaint", "sai", "gimp",
                 "inkscape", "firealpaca", "medibang", "artrage", "rebelle", "affinity", "photo",
                 "designer", "paintdotnet", "onenote", "xournal", "openboard", "fresco", "aseprite",
-                "procreate", "infinitepainter", "corelpainter", "painter", "blender", "zbrush")
+                "procreate", "infinitepainter", "corelpainter", "painter", "blender", "zbrush",
+                "mypaint", "rnote", "pinta", "kolourpaint", "opentoonz", "azpainter", "drawing")
 
 
 def foreground_app():
-    """Executable name (lower case, no .exe) of the foreground window, or "" if unknown."""
+    """Executable name (lower case, no .exe) of the foreground window, or "" if unknown.
+    Linux: the focused window's app class from the compositor (e.g. "krita", "gimp")."""
+    if sys.platform.startswith("linux"):
+        try:
+            import linuxinput
+            return linuxinput.active_window()[0]
+        except Exception:
+            return None
     try:
         import ctypes
         from ctypes import wintypes as wt
@@ -427,6 +436,8 @@ def foreground_app():
 
 
 def app_allowed(name, apps):
+    if name is None:  # the desktop won't say which app is in front (GNOME, KDE on Linux): trust the switch
+        return True
     name = name.lower()
     return bool(name) and any(name.startswith(a.strip().lower()) for a in apps if a.strip())
 

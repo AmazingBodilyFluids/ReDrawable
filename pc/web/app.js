@@ -43,7 +43,25 @@ async function refresh() {
     S = await api().snapshot();
   } catch (e) { return; }
   if (!S) return;
+  applyOS();
   render();
+}
+
+// One page for Windows and Linux: elements carry their Linux wording in data-linux (inner HTML) and
+// data-linux-tip (tooltip), and .win-only / .linux-only show on one system only (app.css).
+const LINUX = () => !!(S && S.os === "linux");
+const OSDESK = () => LINUX() ? "the desktop" : "Windows";
+let osDone = false;
+function applyOS() {
+  if (osDone || !S) return;
+  osDone = true;
+  document.documentElement.dataset.os = S.os || "windows";
+  if (!LINUX()) return;
+  Panel.PRESETS = Panel.LINUX_PRESETS;
+  $("#pePreset").innerHTML = `<option value="">Choose…</option>` +
+    Panel.PRESETS.map((p, i) => `<option value="${i}">${p[0]}${p[2] ? "  ·  " + (p[1] === "hold" ? "hold " : "") + p[2] : ""}</option>`).join("");
+  for (const el of $$("[data-linux]")) el.innerHTML = el.dataset.linux;
+  for (const el of $$("[data-linux-tip]")) el.dataset.tip = el.dataset.linuxTip;
 }
 
 async function liveLoop() {
@@ -69,7 +87,7 @@ function status() {
   if (S.calibrating) return { dot: "busy", lbl: "Calibrating", title: S.calibrating.prompt, text: "Follow along in the calibration window." };
   if (S.connected) {
     const bits = [];
-    bits.push(S.output ? "The pen is drawing in Windows." : "The pen is connected but not sent to Windows yet.");
+    bits.push(S.output ? `The pen is drawing in ${OSDESK()}.` : `The pen is connected but not sent to ${OSDESK()} yet.`);
     if (S.screen) bits.push("Your strokes show on the tablet screen.");
     else bits.push("The tablet screen was closed on the tablet, so your notebooks are showing.");
     return { dot: "ok", lbl: "Connected", title: S.output ? "Ready. Draw away." : "Connected", text: bits.join(" ") };
@@ -522,7 +540,7 @@ function gestureText() {
   const n = t ? t.pts.length : 0;
   let g = GESTURES[a] || (a.startsWith("tap ") ? `${a.split(" ")[1]}-finger tap ×${a.split(" ")[2]}` : a.startsWith("press ") ? "panel button" : "");
   if (t && n && !t.live) g = `${n} finger${n > 1 ? "s" : ""} muted (pen near or palm)`;
-  else if (n && !g) g = `${n} finger${n > 1 ? "s" : ""} down` + (S.touch_mode === "windows" ? ", sent to Windows as touch" : "");
+  else if (n && !g) g = `${n} finger${n > 1 ? "s" : ""} down` + (S.touch_mode === "windows" ? `, sent to ${OSDESK()} as touch` : "");
   if (t && t.palms) g += (g ? " · " : "") + `${t.palms} palm contact${t.palms > 1 ? "s" : ""} ignored`;
   return g;
 }
@@ -589,7 +607,7 @@ const Duck = {
   idle() {
     if (!S.connected) return "Connect the tablet to try the gestures";
     if (S.cfg.gestures === false) return "Finger gestures are off";
-    if (S.touch_mode === "windows") return "Fingers go to Windows as touch";
+    if (S.touch_mode === "windows") return `Fingers go to ${OSDESK()} as touch`;
     return "";
   },
   canvas(cls) {
@@ -1049,7 +1067,7 @@ const Wizard = {
     switch (this.step) {
       case 0: return `
         <div class="lbl">Welcome</div><h1 class="mt">Turn your reMarkable into a drawing tablet</h1>
-        <p class="lead">Your reMarkable becomes a pen tablet for Windows, with pressure, tilt and the eraser end, and it shows what you draw on its own screen. This guide takes about 15 minutes, once.</p>
+        <p class="lead">Your reMarkable becomes a pen tablet for ${LINUX() ? "Linux" : "Windows"}, with pressure, tilt and the eraser end, and it shows what you draw on its own screen. This guide takes about 15 minutes, once.</p>
         <div class="illus"><svg viewBox="0 0 300 140" fill="none" stroke-linecap="round" stroke-linejoin="round">
           <rect x="8" y="30" width="120" height="86" rx="7" style="stroke:var(--accent)" stroke-width="1.5"/><rect x="18" y="38" width="100" height="70" style="fill:var(--accent-d)"/>
           <path d="M30 92c14-26 24-26 32-10s18 16 32-14" style="stroke:var(--text)" stroke-width="2"/>
@@ -1091,7 +1109,7 @@ const Wizard = {
         <div class="pane-title mt2">Not working?</div>
         <ol class="steps">
           <li><div>Wake and unlock the tablet. It disconnects while asleep.</div></li>
-          <li><div>Unplug the cable, wait five seconds, plug it back in. Windows sometimes needs a second try.</div></li>
+          <li><div>Unplug the cable, wait five seconds, plug it back in. ${LINUX() ? "The USB network sometimes needs a second try. Still nothing: see linux/README-linux.md." : "Windows sometimes needs a second try."}</div></li>
           <li><div>Try another USB port or cable. Some cables only charge.</div></li>
         </ol>`;
       case 4: return `
@@ -1125,12 +1143,12 @@ const Wizard = {
         <p class="lead">Keep ReDrawable running. Whenever you plug in the tablet, it connects, turns on the pen and shows the tablet screen. Unplug it and your notebooks come straight back.</p>
         <div class="pane-title mt2">Where things are</div>
         <ol class="steps">
-          <li><div><b>Title bar</b>: two lights for the tablet and the pen, and buttons that turn the pen in Windows, the tablet screen and shapes on and off.</div></li>
+          <li><div><b>Title bar</b>: two lights for the tablet and the pen, and buttons that turn the pen in ${OSDESK()}, the tablet screen and shapes on and off.</div></li>
           <li><div><b>Home</b>: the tablet screen as it will look, with paper, a tracing image and pen masks.</div></li>
           <li><div><b>Calibrate</b>: calibrate again, and choose the display and the part of the tablet you draw on.</div></li>
           <li><div><b>Pen feel</b> for pressure, and <b>Panel &amp; gestures</b> for the shortcut buttons on the tablet.</div></li>
         </ol>
-        <div class="note mt"><svg><use href="#i-info"/></svg><div>Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input.</div></div>`;
+        <div class="note mt"><svg><use href="#i-info"/></svg><div>${LINUX() ? "Krita, GIMP, Inkscape and Xournal++ get pressure and tilt through their normal tablet support. On Wayland, if Krita ignores the pen, start it with <code>QT_QPA_PLATFORM=xcb krita</code>." : "Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input."}</div></div>`;
     }
   },
 
@@ -1238,6 +1256,18 @@ const Panel = {
     ["Fit", "shortcut", "ctrl+0"], ["Move", "shortcut", "v"], ["Lasso", "shortcut", "l"], ["Fill", "shortcut", "g"],
     ["Swap col", "shortcut", "x"], ["Deselect", "shortcut", "ctrl+d"], ["Transform", "shortcut", "ctrl+t"],
     ["New layer", "shortcut", "ctrl+shift+n"], ["Copy", "shortcut", "ctrl+c"], ["Paste", "shortcut", "ctrl+v"],
+    ["Pen", "pen", ""], ["Shapes", "snap", ""], ["Clear", "clear", ""], ["Move image", "trace", ""], ["Light", "light", ""], ["Invert", "mask", ""],
+  ],
+  // Linux: Krita's default keys (as core.KRITA_LEFT / KRITA_RIGHT, checked against Krita's source)
+  LINUX_PRESETS: [
+    ["Undo", "shortcut", "ctrl+z"], ["Redo", "shortcut", "ctrl+shift+z"], ["Save", "shortcut", "ctrl+s"],
+    ["Brush", "shortcut", "b"], ["Eraser", "shortcut", "e"], ["Size -", "shortcut", "["], ["Size +", "shortcut", "]"],
+    ["Hand", "hold", "space"], ["Pick", "hold", "ctrl"], ["Rotate", "hold", "shift+space"], ["Ctrl", "hold", "ctrl"],
+    ["Shift", "hold", "shift"], ["Alt", "hold", "alt"], ["Zoom -", "shortcut", "ctrl+-"], ["Zoom +", "shortcut", "ctrl+="],
+    ["Fit", "shortcut", "2"], ["100%", "shortcut", "ctrl+0"], ["Reset rot", "shortcut", "5"], ["Mirror", "shortcut", "m"],
+    ["Move", "shortcut", "t"], ["Rect sel", "shortcut", "ctrl+r"], ["Fill", "shortcut", "f"], ["Gradient", "shortcut", "g"],
+    ["Swap col", "shortcut", "x"], ["Deselect", "shortcut", "ctrl+shift+a"], ["Transform", "shortcut", "ctrl+t"],
+    ["New layer", "shortcut", "insert"], ["Copy", "shortcut", "ctrl+c"], ["Paste", "shortcut", "ctrl+v"],
     ["Pen", "pen", ""], ["Shapes", "snap", ""], ["Clear", "clear", ""], ["Move image", "trace", ""], ["Light", "light", ""], ["Invert", "mask", ""],
   ],
 

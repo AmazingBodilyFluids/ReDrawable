@@ -438,3 +438,7 @@ ol.steps li .sub { color:var(--dim2); font-size:12px; margin-top:2px; }
 /* Panel & gestures: the profile field reads as a name, not a disabled box; the sub-page switch */
 #profCombo .input[readonly], #maskCombo .input[readonly] { color:var(--text); }
 .seg.subnav { align-self:flex-start; }
+
+/* one page for both systems (applyOS in app.js) */
+html[data-os="linux"] .win-only { display: none !important; }
+html:not([data-os="linux"]) .linux-only { display: none !important; }

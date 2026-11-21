@@ -177,6 +177,32 @@ DEFAULT_TAPS = {"1x2": {"t": "", "keys": ""}, "1x3": {"t": "New layer", "keys": 
                 "2x1": {"t": "", "keys": ""}, "2x2": {"t": "", "keys": ""}, "3x1": {"t": "", "keys": ""},
                 "5x2": {"t": "Reset rotation", "keys": "r+esc"}}
 DEFAULTS["taps"] = DEFAULT_TAPS
+
+# Linux: Krita is the drawing app to expect, so the defaults and the built-in preset use Krita's own keys.
+# Checked against Krita's source (github.com/KDE/krita, master, 2026-11-21): krita/krita.action and
+# krita/kritamenu.action (menu actions), the tool factories' setShortcut() (B brush, T move, F fill,
+# G gradient, P colour sampler, Ctrl+T transform, Ctrl+R rectangle select) and
+# krita/data/input/kritadefault.profile (canvas input: Space+drag pan, Shift+Space+drag rotate,
+# 5 reset rotation, 1 zoom 100 %, 2 fit to view, Ctrl+click samples the colour).
+# Krita has no default key for the freehand lasso; Ctrl+0 is 100 %, not fit.
+DEFAULT_PROFILE = "Photoshop"
+if sys.platform.startswith("linux"):
+    DEFAULT_PROFILE = "Krita"  # the default layout is the Krita preset, so the preset is not added twice
+    KRITA_LEFT = [_b("Undo", "ctrl+z"), _b("Redo", "ctrl+shift+z"), _b("Size -", "["), _b("Size +", "]"),
+                  _b("Brush", "b"), _b("Eraser", "e"), _b("Hand", "space", "hold"), _b("Pick", "ctrl", "hold"),
+                  _b("Shift", "shift", "hold"), _b("Mirror", "m"), _b("Zoom -", "ctrl+-"), _b("Zoom +", "ctrl+="),
+                  _b("Fit", "2"), _b("Shapes", kind="snap"), _b("Pen", kind="pen"), _b("Save", "ctrl+s")]
+    KRITA_RIGHT = [_b("Move", "t"), _b("Transform", "ctrl+t"), _b("Rect sel", "ctrl+r"), _b("Deselect", "ctrl+shift+a"),
+                   _b("Select all", "ctrl+a"), _b("Invert sel", "ctrl+shift+i"), _b("New layer", "insert"), _b("Duplicate", "ctrl+j"),
+                   _b("Merge down", "ctrl+e"), _b("Group", "ctrl+g"), _b("Swap col", "x"), _b("Reset col", "d"),
+                   _b("Fill", "f"), _b("Rotate", "shift+space", "hold"), _b("Move image", kind="trace"), _b("Light", kind="light")]
+    DEFAULT_BUTTONS[:] = [dict(b) for b in KRITA_LEFT]
+    DEFAULT_BUTTONS_RIGHT[:] = [dict(b) for b in KRITA_RIGHT]
+    OLD_DEFAULT_BUTTONS = DEFAULT_BUTTONS[:-1] + [{"t": "Clear", "kind": "clear", "keys": ""}]
+    PRESETS = [{"name": "Krita", "buttons": KRITA_LEFT, "buttons_right": KRITA_RIGHT}]
+    DEFAULT_TAPS["1x3"]["keys"] = "insert"   # Krita: Insert = new paint layer
+    DEFAULT_TAPS["5x2"]["keys"] = "5"        # Krita: 5 = reset canvas rotation
+    DEFAULTS["rotate_keys"] = "shift+space"
 MASK_KEYS = {"mask_contrast": "contrast", "mask_mode": "mode", "mask_invert": "invert", "mask_strength": "strength"}  # cfg -> the active mask's entry
 BUTTON_KINDS = ("shortcut", "hold", "pen", "snap", "clear", "trace", "light", "mask", "none")
 MASK_N = penmask.N
@@ -204,9 +230,9 @@ def clean_profiles(profiles, current=None):
     if out:
         return out
     if current:  # settings from before profiles: that layout comes first
-        out.append({"name": "Photoshop", "buttons": clean_buttons(current),
+        out.append({"name": DEFAULT_PROFILE, "buttons": clean_buttons(current),
                     "buttons_right": clean_buttons(DEFAULT_BUTTONS_RIGHT), "touch": "shortcuts"})
-    return out + preset_profiles()
+    return out + preset_profiles(p["name"] for p in out)
 
 
 def preset_profiles(skip=()):
@@ -761,7 +787,7 @@ class Engine:
         self.peak = 0
         self.snap_last = None  # last snap or skip, for the UI
         self.keys = keys.Keys()
-        self.mouse = keys.Mouse()
+        self.mouse = keys.make_mouse()
         self.pan_space = False
         self.last_action = None
         self.touch = None       # the latest finger report from the tablet, for the live view
@@ -828,6 +854,7 @@ class Engine:
             "snap_last": self.snap_last, "last_action": self.last_action, "held_keys": sorted(self.keys.held),
             "view": self.view_size(), "panel_px": PANEL_PX, "tab_px": TAB_PX,
             "key_names": sorted(keys.VK), "key_labels": keys.LABEL, "default_buttons": DEFAULT_BUTTONS,
+            "os": "linux" if sys.platform.startswith("linux") else "windows" if sys.platform == "win32" else sys.platform,
             "default_buttons_right": DEFAULT_BUTTONS_RIGHT, "presets": {p["name"]: {"left": p["buttons"], "right": p["buttons_right"]} for p in PRESETS},
             "pen_rate": self.rate.last, "mask_ver": self.pmask.ver, "mask_pct": round(100 * self.pmask.coverage()),
             "gesture_list": self.gesture_list(), "trace_key": self.trace_key(), "mask_vers": {k: m.ver for k, m in self.masks.items()},
@@ -1319,7 +1346,7 @@ class Engine:
         if not self.cfg.get("gestures", True):
             return []
         if self.touch_mode() == "windows":
-            rows = [["One finger", "Touch in Windows"], ["Two fingers", "Scroll, pinch to zoom"]]
+            rows = [["One finger", "Touch on the desktop" if sys.platform.startswith("linux") else "Touch in Windows"], ["Two fingers", "Scroll, pinch to zoom"]]
         else:
             rows = [["3 fingers, swipe left", "Undo"], ["3 fingers, swipe right", "Redo"],
                     ["2 fingers, drag", "Pan the canvas"], ["2 fingers, pinch", "Zoom"]]
@@ -1807,6 +1834,19 @@ class Engine:
         return self.cal is not None and not self.companion.running
 
     def make_pen(self):
+        if sys.platform.startswith("linux"):
+            import linuxinput
+            if not linuxinput.available():
+                self.output_on = False
+                self.set_status("error", "No access to /dev/uinput, so the pen can't be created. "
+                                "Run linux/setup.sh once (it adds a udev rule), then log out and back in.")
+                return None
+            try:
+                return linuxinput.LinuxPen()
+            except Exception as ex:
+                self.output_on = False
+                self.set_status("error", f"Couldn't create the virtual pen: {ex}")
+                return None
         if sys.platform != "win32":
             return NullPen()
         try:
@@ -2057,9 +2097,13 @@ class Engine:
             return
         if self.touch_out is None:
             try:
-                self.touch_out = rt.WindowsTouch() if sys.platform == "win32" else None
+                if sys.platform == "win32":
+                    self.touch_out = rt.WindowsTouch()
+                else:
+                    import linuxinput
+                    self.touch_out = linuxinput.LinuxTouch()
             except OSError as ex:
-                self.set_status("error", f"Windows touch isn't available: {ex}")
+                self.set_status("error", f"Touch input isn't available: {ex}")
                 return
         if self.touch_out:
             self.touch_out.update({cid: self.mapper.frac_to_screen(p, q) for cid, p, q in pts} if live else {})

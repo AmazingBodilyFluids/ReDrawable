@@ -157,7 +157,7 @@
             <div class="opt mt" style="display:block"><div class="row between"><span class="hint" data-tip="Press hard once. The bar should get near the end.">Full range</span><button class="btn ghost" onclick="api().reset_peak()">Reset</button></div>
               <div class="meter mts"><i id="peakBar"></i></div>
               <div class="readout mts" id="peakText" style="margin:0"></div></div>
-            <div class="hint mts" data-tip="Photoshop: turn on Pen Pressure. Krita, Clip Studio: use Windows Ink."><svg class="ic"><use href="#i-info"/></svg> No pressure in your app?</div>
+            <div class="hint mts" data-tip="Photoshop: turn on Pen Pressure. Krita, Clip Studio: use Windows Ink." data-linux-tip="Krita, GIMP, Inkscape: pressure comes through their own tablet support. Krita on Wayland ignores the pen? Start it with QT_QPA_PLATFORM=xcb krita"><svg class="ic"><use href="#i-info"/></svg> No pressure in your app?</div>
           </div>
           <div class="pane">
             <div class="pane-title">Pen</div>
@@ -165,7 +165,7 @@
               <label class="switch"><input type="checkbox" data-key="tilt"><span class="track"></span></label></div>
             <div class="opt"><div class="tx" data-tip="A stroke stops at the edge of the active area."><div class="t1">Lift at edge</div></div>
               <label class="switch"><input type="checkbox" data-key="edge_lift"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx" data-tip="Ripples and cursor effects Windows draws"><div class="t1">Feedback</div></div>
+            <div class="opt win-only"><div class="tx" data-tip="Ripples and cursor effects Windows draws"><div class="t1">Feedback</div></div>
               <select class="input" data-key="feedback" style="width:150px"><option value="indirect">Cursor only</option><option value="default">Windows default</option><option value="none">None</option></select></div>
           </div>
         </div>
@@ -199,7 +199,7 @@
               <div class="kinds" id="peKinds">
                 <button data-k="shortcut" data-tip="Taps a key or combination"><b>Shortcut</b></button>
                 <button data-k="hold" data-tip="Held while you touch it; a quick tap locks it"><b>Hold key</b></button>
-                <button data-k="pen" data-tip="Pauses the pen in Windows"><b>Pen on/off</b></button>
+                <button data-k="pen" data-tip="Pauses the pen in Windows" data-linux-tip="Pauses the pen"><b>Pen on/off</b></button>
                 <button data-k="snap" data-tip="Hold-to-snap shapes"><b>Shapes on/off</b></button>
                 <button data-k="clear" data-tip="Only useful if trails are set to stay"><b>Clear ink</b></button>
                 <button data-k="trace" data-tip="Fingers move and zoom the tracing image"><b>Move image</b></button>
@@ -222,9 +222,9 @@
             <div class="pane-title">Finger gestures</div>
             <div class="opt"><div class="tx" data-tip="3 fingers: undo / redo. 2: pan, zoom. 5: rotate, reset, clear. Off while the pen is near."><div class="t1">On</div></div>
               <label class="switch"><input type="checkbox" data-key="gestures"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx" data-tip="Shortcuts: gestures send keys. Windows touch: the tablet acts as a touchscreen. Saved with the profile."><div class="t1">Finger mode</div></div>
-              <div class="seg" id="profTouch"><button data-v="shortcuts">Shortcuts</button><button data-v="windows">Windows touch</button></div></div>
-            <div class="opt"><div class="tx" data-tip="Held for a 5-finger twist. Photoshop: r. Krita, Clip Studio: shift+space."><div class="t1">Rotate key</div></div>
+            <div class="opt"><div class="tx" data-tip="Shortcuts: gestures send keys. Windows touch: the tablet acts as a touchscreen. Saved with the profile." data-linux-tip="Shortcuts: gestures send keys. Touchscreen: the tablet acts as a touchscreen. Saved with the profile."><div class="t1">Finger mode</div></div>
+              <div class="seg" id="profTouch"><button data-v="shortcuts">Shortcuts</button><button data-v="windows" data-linux="Touchscreen">Windows touch</button></div></div>
+            <div class="opt"><div class="tx" data-tip="Held for a 5-finger twist. Photoshop: r. Krita, Clip Studio: shift+space." data-linux-tip="Held for a 5-finger twist. Krita: shift+space. Apps that rotate with R: r."><div class="t1">Rotate key</div></div>
               <input class="input mono" data-key="rotate_keys" style="width:130px"></div>
             <div class="opt"><div class="tx" data-tip="Swipe distance for each undo or redo."><div class="t1">Swipe step</div></div>
               <div class="seg" data-key="swipe_step"><button data-v="70">Short</button><button data-v="100">Medium</button><button data-v="150">Long</button></div></div>
@@ -246,7 +246,7 @@
               </div>
               <button class="btn" id="profNew" data-tip="A new profile with the default buttons">New</button>
               <button class="btn" id="profDup" data-tip="A copy of this profile">Duplicate</button>
-              <button class="btn ghost" id="profPresets" data-tip="Adds back any built-in Photoshop set that's missing">Presets</button>
+              <button class="btn ghost" id="profPresets" data-tip="Adds back any built-in Photoshop set that's missing" data-linux-tip="Adds back the built-in Krita set if it's missing">Presets</button>
               <button class="btn ghost" id="profDel">Delete</button>
             </div>
           <div class="pm-wrap" id="pmWrap"></div>
@@ -276,7 +276,7 @@
               <label class="switch"><input type="checkbox" data-key="auto_connect"><span class="track"></span></label></div>
             <div class="opt"><div class="tx" data-tip="Sends the pen to this computer right after connecting. Unplug to get your notebooks back."><div class="t1">Pen on when connected</div></div>
               <label class="switch"><input type="checkbox" data-key="auto_output"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx" data-tip="Closing the window keeps the pen working."><div class="t1">Close to tray</div></div>
+            <div class="opt win-only"><div class="tx" data-tip="Closing the window keeps the pen working."><div class="t1">Close to tray</div></div>
               <label class="switch"><input type="checkbox" data-key="close_to_tray"><span class="track"></span></label></div>
             <details class="disclose">
               <summary><div class="tx"><div class="t1">Theme</div><div class="t2" id="themeName"></div></div>
@@ -302,7 +302,7 @@
   <span class="sb-msg" id="sbMsg"></span>
   <span class="grow"></span>
   <span class="sb-acts">
-    <label class="sb-wifi" data-tip="The pen draws in Windows">Pen
+    <label class="sb-wifi" data-tip="The pen draws in Windows" data-linux-tip="The pen draws on the desktop">Pen
       <span class="switch sm"><input type="checkbox" id="sbPen"><span class="track"></span></span></label>
     <label class="sb-wifi" data-tip="Hold the pen still at the end of a stroke to snap it to a clean shape">Shapes
       <span class="switch sm"><input type="checkbox" id="sbSnap"><span class="track"></span></span></label>
