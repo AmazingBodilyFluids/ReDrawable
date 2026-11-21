@@ -24,16 +24,16 @@ On first start, go to *Settings → Pen device → Allow*. It asks for your pass
   - Krita's keys as the default panel
   Linux was tested on Omarchy.
 - **Three tablet panels: Shortcuts, Mask and Tracing image.** Each panel has its own corner tab, and they all open in the same place. Opening one folds the others.
-- **The Tracing image panel** holds several images. You pick one on the tablet, and each image keeps its own place and strength.
 - **Button setting** for each panel:
   - *Default* works as before.
   - *Pen hover* hides a folded panel's tab until the pen hovers along that edge, so you can draw into the corner. A pen tap on the tab opens the panel.
   - *Finger only* keeps the panel shown. The pen draws straight through it, and only fingers press its buttons.
 - **Panel & gestures page:**
-  - Shortcuts, Mask, Tracing and Gestures each have their own page.
+  - Shortcuts, Gestures, Mask and Tracing each have their own page, in that order.
   - *Edit Left / Right* unfolds that panel and shows it close up. Scroll to see the rest of it.
 - **Recording keys:** the first key you press ends the recording. Esc or a click elsewhere cancels it. The rotate key is recorded the same way.
 - **Touchscreen / Windows touch** finger modes now turn the tablet's own finger gestures off. *Shortcuts* turns them back on.
+- **The Tracing image panel** holds several images. You pick one on the tablet, and each image keeps its own place and strength.
 
 ## Fixed
 
