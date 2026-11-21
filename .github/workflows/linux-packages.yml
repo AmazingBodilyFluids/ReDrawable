@@ -54,7 +54,7 @@ jobs:
           EOF
           chmod +x smoke.sh
           xvfb-run -a ./smoke.sh | tee windows.txt
-          tail -40 run.log ~/.config/ReDrawable/redrawable.log || true
+          tail -n 60 run.log ~/.config/ReDrawable/redrawable.log || true
           grep -q '"ReDrawable": ("redrawable"' windows.txt
       - uses: actions/upload-artifact@v4
         with:
