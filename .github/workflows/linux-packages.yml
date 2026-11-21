@@ -43,7 +43,8 @@ jobs:
           appimage-builder --recipe linux/appimage/AppImageBuilder.yml --skip-tests
       - name: Start it once (headless) to catch missing libraries
         run: |
-          sudo apt-get install -y --no-install-recommends xvfb x11-utils
+          # a desktop's own graphics drivers (the AppImage uses the host's, like on a real PC)
+          sudo apt-get install -y --no-install-recommends xvfb x11-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0
           chmod +x ReDrawable-0.11.0-x86_64.AppImage
           cat > smoke.sh <<'EOF'
           #!/bin/sh
