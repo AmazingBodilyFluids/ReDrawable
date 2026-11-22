@@ -23,7 +23,7 @@ AppDir:
     id: io.github.amazingbodilyfluids.ReDrawable
     name: ReDrawable
     icon: redrawable
-    version: 0.12.0
+    version: 0.13.0
     exec: usr/bin/python3
     exec_args: "$APPDIR/usr/share/redrawable/pc/app.py $@"
 
@@ -99,6 +99,6 @@ AppDir:
 
 AppImage:
   arch: x86_64
-  file_name: ReDrawable-0.12.0-x86_64.AppImage
+  file_name: ReDrawable-0.13.0-x86_64.AppImage
   update-information: None
   sign-key: None

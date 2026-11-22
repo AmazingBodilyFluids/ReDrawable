@@ -98,6 +98,7 @@ DEFAULTS = {
 }
 PANEL_PX = 302  # panel width on the tablet, in panel pixels (about 34 mm)
 STRIP_PX = PANEL_PX  # the mask and tracing image panels: as wide as the shortcut panel
+# The Move's panels are half as wide, one button across, and scroll (devices.Model.panel_cols)
 TAB_PX = 84     # one corner tab; a side's panels each have one, in a row from the corner (shortcuts, mask, image)
 # Only one kind of panel is open at a time: opening one folds the others (both shortcut panels count as one kind)
 OPEN_KEYS = ("panel_open", "panel_open_right", "mask_strip_open", "trace_strip_open")
@@ -806,6 +807,10 @@ class Engine:
         if self.cfg.get("palm_size") == 28:  # first guess, in raw units; Qt reports ~0.75 of that
             self.cfg["palm_size"] = 20
         self.calibration = saved.get("calibration")
+        # one calibration per tablet model: the current one in "calibration", the others kept here
+        self.calibrations = dict(saved.get("calibrations") or {})
+        if self.calibration and "model" not in self.calibration:
+            self.calibration["model"] = self.cfg.get("model") or devices.DEFAULT.key  # from before models had their own
         if self.calibration and not saved.get("gui", {}).get("onboarded"):
             self.cfg["onboarded"] = True  # an existing setup (calibrated before) needs no walkthrough
         if (self.calibration or {}).get("homography"):
@@ -901,7 +906,7 @@ class Engine:
             "has_key": os.path.exists(APP_KEY), "screen_log": list(self.companion.log)[-12:],
             "position": self.position(), "position_mismatch": self.position_mismatch(),
             "snap_last": self.snap_last, "last_action": self.last_action, "held_keys": sorted(self.keys.held),
-            "view": self.view_size(), "panel_px": PANEL_PX, "tab_px": TAB_PX,
+            "view": self.view_size(), "panel_px": self.panel_px(), "panel_cols": self.model.panel_cols, "tab_px": TAB_PX,
             "key_names": sorted(keys.VK), "key_labels": keys.LABEL, "default_buttons": DEFAULT_BUTTONS,
             "os": "linux" if sys.platform.startswith("linux") else "windows" if sys.platform == "win32" else sys.platform,
             "session": os.environ.get("XDG_SESSION_TYPE", "") if sys.platform.startswith("linux") else "",
@@ -909,7 +914,7 @@ class Engine:
             "default_buttons_right": DEFAULT_BUTTONS_RIGHT, "presets": {p["name"]: {"left": p["buttons"], "right": p["buttons_right"]} for p in PRESETS},
             "pen_rate": self.rate.last, "mask_ver": self.pmask.ver, "mask_pct": round(100 * self.pmask.coverage()),
             "gesture_list": self.gesture_list(), "trace_key": self.trace_key(), "mask_vers": {k: m.ver for k, m in self.masks.items()},
-            "strip_px": STRIP_PX, "strip_side": self.strip_side(), "strip_shown": bool(self.strip_frac()), "trace_thumb_vers": self.trace_thumb_vers(), "tap_slots": TAP_SLOTS, "taps": clean_taps(self.cfg.get("taps")),
+            "strip_px": self.panel_px(), "strip_side": self.strip_side(), "strip_shown": bool(self.strip_frac()), "trace_thumb_vers": self.trace_thumb_vers(), "tap_slots": TAP_SLOTS, "taps": clean_taps(self.cfg.get("taps")),
         }
 
     def live(self):
@@ -1096,11 +1101,15 @@ class Engine:
         """Button: Finger only. The panels stay shown, the pen draws through them."""
         return self.cfg.get("panel_show") == "tap"
 
+    def panel_px(self):
+        """Width of a tablet panel in panel pixels: half on a model with one button across."""
+        return PANEL_PX if self.model.panel_cols == 2 else PANEL_PX // 2
+
     def panel_frac(self, side="left"):
         """Share of the tablet (across, as it sits) the open panel on this side takes, or 0."""
         if not self.panel_shown(side) or not self.panel_open(side) or self.panel_fingers_only():
             return 0.0  # Finger only: the panel keeps nothing from the pen
-        return PANEL_PX / self.view_size()[0]
+        return self.panel_px() / self.view_size()[0]
 
     def strip_side(self):
         return "left" if self.cfg.get("mask_side") == "left" else "right"
@@ -1114,7 +1123,7 @@ class Engine:
         """Share of the tablet the open mask panel keeps from the pen, or 0."""
         if not self.strip_avail() or not self.cfg.get("mask_strip_open") or self.cfg.get("mask_show") == "tap":
             return 0.0  # Finger only: the pen draws through it
-        return STRIP_PX / self.view_size()[0]
+        return self.panel_px() / self.view_size()[0]
 
     def trace_side(self):
         return "left" if self.cfg.get("trace_side") == "left" else "right"
@@ -1160,7 +1169,7 @@ class Engine:
         kind = self.open_kind(side)
         if not kind or self.kind_show(kind) == "tap":
             return 0.0  # Finger only: the pen draws through the panel
-        return PANEL_PX / self.view_size()[0]
+        return self.panel_px() / self.view_size()[0]
 
     def effective_area(self):
         a = list(self.cfg["area"])
@@ -1524,7 +1533,7 @@ class Engine:
         c = self.companion
         if not c.running or not c.tab:
             return
-        c.send(f"maskstrip {int(self.strip_avail())} {self.strip_side()} {STRIP_PX / self.view_size()[0]:.4f} "
+        c.send(f"maskstrip {int(self.strip_avail())} {self.strip_side()} {self.panel_px() / self.view_size()[0]:.4f} "
                f"{int(bool(self.cfg.get('mask_strip_open')))}")
         out = []
         for e in self.cfg["masks"]:
@@ -1572,7 +1581,7 @@ class Engine:
                 # side folded, the tab is only there while the tablet shows it ("peek")
                 if show != "tap" and not (show == "hover" and not opened and side not in peek):
                     return True
-            if opened and self.kind_show(opened) != "tap" and x < PANEL_PX:
+            if opened and self.kind_show(opened) != "tap" and x < self.panel_px():
                 return True
         return False
 
@@ -1815,6 +1824,9 @@ class Engine:
         cfg["gui"] = {k: self.cfg[k] for k in DEFAULTS if k in self.cfg}
         if self.calibration is not None:
             cfg["calibration"] = self.calibration
+        else:
+            cfg.pop("calibration", None)  # e.g. a Move plugged in after a Paper Pro: kept in "calibrations"
+        cfg["calibrations"] = self.calibrations
         rt.save_config(cfg)
 
     def build_mapper(self, absinfo):
@@ -1825,7 +1837,8 @@ class Engine:
                          homography=cal.get("homography"), correction=cal.get("correction"), aspect=cal.get("aspect"),
                          pressure_gamma=float(self.cfg["gamma"]), pressure_threshold=float(self.cfg["threshold"]),
                          area=tuple(self.effective_area()), edge_lift=bool(self.cfg["edge_lift"]),
-                         invert_tilt_y=(self.pen or {}).get("invert_tilt_y", True))
+                         invert_tilt_y=(self.pen or {}).get("invert_tilt_y", True),
+                         panel_aspect=self.model.aspect)
 
     def refresh_mapper(self):
         absinfo = (self.pen or {}).get("abs") or {"X": {"min": 0, "max": 11180}, "Y": {"min": 0, "max": 15340},
@@ -1946,7 +1959,20 @@ class Engine:
         self.set_status("idle", "Disconnected. Press Connect, or unplug and plug in again.")
 
     def set_model(self, model):
-        """The connected reMarkable: its screen, its size in mm and what it has (devices.py)."""
+        """The connected reMarkable: its screen, its size in mm and what it has (devices.py).
+        Each model keeps its own calibration: a Paper Pro's doesn't fit a Move."""
+        cal = getattr(self, "calibration", None)
+        if cal and cal.get("model") != model.key:
+            self.calibrations[cal["model"]] = cal
+            self.calibration = None
+        if not getattr(self, "calibration", None) and model.key in getattr(self, "calibrations", {}):
+            self.calibration = self.calibrations.pop(model.key)
+        if cal is not self.calibration and hasattr(self, "cfg"):  # swapped: the cursor direction goes with it
+            pos = POSITIONS.get(self.position() or "")
+            if (self.calibration or {}).get("homography"):
+                self.cfg["orientation"] = "as-calibrated"
+            elif pos:
+                self.cfg["orientation"] = pos["orientation"]
         self.model = model
         rt.PANEL_MM = model.panel_mm  # calibration size and shapes work in the panel's mm
 
@@ -2204,7 +2230,9 @@ class Engine:
         self.refresh_mapper()  # the panel's share of the tablet depends on mode and rotation
         c.send(f"rot {self.companion_rotation()}")
         shown = self.panel_shown()
-        c.send(f"panel {self.cfg.get('panel', 'left') if shown else 'off'} {PANEL_PX / self.view_size()[0]:.4f}")
+        if self.model.panel_cols != 2:  # sent only then, so the other models' tablet screen is as before
+            c.send(f"cols {self.model.panel_cols}")
+        c.send(f"panel {self.cfg.get('panel', 'left') if shown else 'off'} {self.panel_px() / self.view_size()[0]:.4f}")
         c.send(f"panelopen {int(self.panel_open('left'))} {int(self.panel_open('right'))}")
         self.peek = set()  # the tablet hides the fold buttons again on "panelshow"
         c.send(f"panelshow {self.kind_show('keys')} {self.kind_show('mask')} {self.kind_show('trace')}")
@@ -2293,6 +2321,7 @@ class Engine:
             self.changed()
             return
         result["device"] = self.pen["name"]
+        result["model"] = self.model.key
         result["date"] = time.strftime("%Y-%m-%d %H:%M")
         self.calibration = result
         self.cfg["orientation"] = "as-calibrated"  # the taps already capture how the tablet sits

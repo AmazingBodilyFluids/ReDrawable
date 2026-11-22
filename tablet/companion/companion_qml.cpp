@@ -27,6 +27,11 @@ Window {
     // side panels: one on either side, both, or none. Buttons 0-15 are the left panel's, 16-31 the right's.
     property string panelSide: "left"   // left | right | both | off
     property real panelFrac: 0.14       // of the view width
+    // buttons across a panel: 2, or 1 on a small tablet (the Move), where the panels are half as
+    // wide and their buttons and tiles scroll with a finger drag ("cols 1" from the PC)
+    property int cols: 2
+    readonly property bool narrow: cols === 1
+    property var scrolls: ({left: 0, right: 0, mask: 0, trace: 0})   // px scrolled, narrow only
     property bool panelOpen: true       // the left panel; folded away with the tab in its top corner
     property bool panelOpenR: true      // the right panel
     property bool gesturesOn: true
@@ -201,26 +206,36 @@ Window {
     function resOf(s) { var k = openKind(s); return k !== "" && kindShow(k) !== "tap" ? panelPx : 0 }
     readonly property real resL: resOf("left")
     readonly property real resR: resOf("right")
-    readonly property real tileW: (panelPx - 36) / 2
+    readonly property real tileW: narrow ? panelPx - 24 : (panelPx - 36) / 2
     readonly property real stripThumbH: tileW * view.height / view.width
     readonly property real stripTileH: stripThumbH + 46
-    readonly property int stripTop: 180   // the thumbnails start under the two buttons
+    readonly property int stripTop: narrow ? 260 : 180   // the thumbnails start under the two buttons (stacked when narrow)
+    // narrow: the height the tiles scroll in
+    function listH(k) { return (k === "mask" ? paperTileY - 10 : view.height - 10) - stripTop }
     // a touch in the open mask / tracing image panel on side s: its two buttons, a thumbnail, the paper
     function listPick(k, s, p) {
-        var lx = p.x - sideX(s), second = lx >= panelPx / 2
-        if (p.y >= 96 && p.y < 166) {
+        var lx = p.x - sideX(s), second = narrow ? p.y >= 176 && p.y < 246 : lx >= panelPx / 2
+        if (narrow ? p.y >= 96 && p.y < 246 : p.y >= 96 && p.y < 166) {
+            if (narrow && p.y >= 166 && p.y < 176) return   // the gap between the two
             if (second) pickId(k, "none")
             else if (k === "mask") act("maskinvert")   // the panel stays open to show it
             else if (traceActive !== "") { tstripOpen = false; act("tracestrip 0"); act("traceadjust") }   // Move: out of the way
             return
         }
         if (k === "mask" && p.y >= paperTileY && p.y < paperTileY + paperTileH) {  // the paper: left half back, right half on
+            if (narrow) second = lx >= panelPx / 2
             var c = papers.indexOf(paper), n = papers.length
             act("paper " + papers[((c < 0 ? 0 : c) + (second ? 1 : n - 1)) % n])
             return
         }
         if (p.y < stripTop) return
         var list = k === "mask" ? maskList : traceList, pitch = stripTileH + 10
+        if (narrow) {
+            if (p.y >= stripTop + listH(k)) return
+            var j = Math.floor((p.y - stripTop + scrollOf(k)) / pitch)
+            if (j >= 0 && j < list.length && (p.y - stripTop + scrollOf(k)) - j * pitch < stripTileH) pickId(k, list[j].id)
+            return
+        }
         var row = Math.floor((p.y - stripTop) / pitch), i = row * 2 + (second ? 1 : 0)
         if (i < list.length && (p.y - stripTop) - row * pitch < stripTileH && tileFits(k, row)) pickId(k, list[i].id)
     }
@@ -300,8 +315,42 @@ Window {
         console.warn("LIGHT:" + pct)   // main.cpp sets the light itself and tells the PC
     }
     readonly property int rows: 8
-    readonly property real cellW: panelPx / 2
-    readonly property real cellH: (view.height - headH - footH) / rows
+    readonly property real cellW: panelPx / cols
+    readonly property real btnAreaH: view.height - headH - footH
+    // narrow: the panel without the gestures button and light bar runs its buttons to the bottom
+    function footOf(s) { return narrow && s !== mainSide ? 8 : footH }
+    function areaOf(s) { return view.height - headH - footOf(s) }
+    // narrow: whole rows of about 120 px show, the rest scroll
+    readonly property int rowsShown: narrow ? Math.max(1, Math.floor(btnAreaH / 120)) : rows
+    readonly property real cellH: btnAreaH / rowsShown
+    // ---- narrow panels scroll: by panel ("left" / "right" shortcuts, "mask", "trace")
+    function scrollOf(key) { return narrow ? (scrolls[key] || 0) : 0 }
+    function scrollMax(key) {
+        if (key === "mask" || key === "trace") {
+            var n = (key === "mask" ? maskList : traceList).length
+            return Math.max(0, n * (stripTileH + 10) - listH(key))
+        }
+        var first = key === "right" ? 16 : 0
+        var nb = Math.max(0, Math.min(16, buttons.length - first))
+        return Math.max(0, nb * cellH - areaOf(key))
+    }
+    function setScroll(key, v) {
+        var o = {}
+        for (var k in scrolls) o[k] = scrolls[k]
+        o[key] = Math.max(0, Math.min(scrollMax(key), v))
+        if (o[key] === scrolls[key]) return
+        scrolls = o
+    }
+    onScrollsChanged: refreshScreen()
+    onButtonsChanged: { setScroll("left", scrollOf("left")); setScroll("right", scrollOf("right")) }
+    // the scrolling part of the panel under p: its key, or "" (narrow only)
+    function scrollKeyAt(p) {
+        if (!narrow) return ""
+        var u = uiAt(p)
+        if (!u || u.t !== "body") return ""
+        if (u.k === "keys") return sideOpen(u.s) && p.y >= headH && p.y < view.height - footOf(u.s) ? u.s : ""
+        return p.y >= stripTop && p.y < stripTop + listH(u.k) ? u.k : ""
+    }
 
     // The PC sends its own layout ("buttons [json]"); this is the same as its default.
     // kind: tap (keys), hold (keys held / locked), pen, snap, local (clear ink), none
@@ -337,6 +386,7 @@ Window {
         else if (c === "clear") clearInk()
         else if (c === "snap") snap(a)
         else if (c === "panel") { panelSide = a[0]; if (a.length > 1) panelFrac = parseFloat(a[1]) }
+        else if (c === "cols") { cols = parseInt(a[0]) === 1 ? 1 : 2 }
         else if (c === "panelshow") { panelShow = a[0]; maskShow = a[1] || "always"; traceShow = a[2] || "always"; unpeek() }
         else if (c === "panelopen") { panelOpen = a[0] === "1"; if (a.length > 1) panelOpenR = a[1] === "1" }
         else if (c === "paper") { paper = a[0]; if (a.length > 1) paperStep = Math.max(12, parseFloat(a[1])) }
@@ -428,8 +478,10 @@ Window {
     }
     function buttonAt(p) {
         var s = panelAt(p)
-        if (s === "" || !sideOpen(s) || p.y < headH || p.y >= view.height - footH) return -1
-        var i = Math.floor((p.y - headH) / cellH) * 2 + (p.x - sideX(s) >= cellW ? 1 : 0) + (s === "right" ? 16 : 0)
+        if (s === "" || !sideOpen(s) || p.y < headH || p.y >= view.height - footOf(s)) return -1
+        var i = narrow ? Math.floor((p.y - headH + scrollOf(s)) / cellH) + (s === "right" ? 16 : 0)
+                       : Math.floor((p.y - headH) / cellH) * 2 + (p.x - sideX(s) >= cellW ? 1 : 0) + (s === "right" ? 16 : 0)
+        if (narrow && (i - (s === "right" ? 16 : 0)) >= 16) return -1
         return i < buttons.length ? i : -1
     }
     function setLatch(i, on) {
@@ -548,6 +600,21 @@ Window {
     property var gC0: null         // centroid when the current finger count began
     property var gSent: null       // last pan offset sent
     property var touchBtn: ({})    // pointId -> panel item, for fingers that landed on the panel
+    // narrow panels: pointId -> {key, y0, s0, p, moved, pressed, btn} for a finger on a scrolling
+    // part (touchBtn -7). A drag scrolls; a tap presses on lifting; holding still presses (hold keys)
+    property var drags: ({})
+    Timer {
+        id: dragHold; interval: 350
+        onTriggered: {
+            var d = win.drags
+            for (var k in d) {
+                var g = d[k]
+                if (g.moved || g.pressed || g.key === "mask" || g.key === "trace") continue
+                g.pressed = true; g.btn = win.pressAt(g.p)
+            }
+            win.drags = d
+        }
+    }
     property real palmSize: 0      // contact size (panel units) above which a touch is a palm; 0 = off
     property var palms: ({})       // pointId -> true: contacts judged to be a palm, ignored until lifted
     property real gLastEv: 0       // last touch event of any kind, for the stuck-contact sweep
@@ -949,18 +1016,23 @@ Window {
                        color: lp.firstOn ? "white" : "black" }
             }
             Rectangle {  // None
-                x: 24 + win.tileW; y: 96; width: win.tileW; height: 70; radius: 12
+                x: win.narrow ? 12 : 24 + win.tileW; y: win.narrow ? 176 : 96; width: win.tileW; height: 70; radius: 12
                 color: lp.active === "" ? "black" : "white"; border.width: 3; border.color: "black"
                 Text { anchors.centerIn: parent; text: "None"; font.pixelSize: 24; font.bold: true
                        color: lp.active === "" ? "white" : "black" }
             }
+            Item {  // narrow: the tiles scroll inside this
+            y: win.narrow ? win.stripTop : 0; width: parent.width; height: win.narrow ? win.listH(lp.kind) : parent.height
+            clip: win.narrow
             Repeater {
                 model: lp.isMask ? win.maskList : win.traceList
                 Item {
                     property bool on: modelData.id === lp.active
-                    x: 12 + (index % 2) * (win.tileW + 12); y: win.stripTop + Math.floor(index / 2) * (win.stripTileH + 10)
+                    x: win.narrow ? 12 : 12 + (index % 2) * (win.tileW + 12)
+                    y: win.narrow ? index * (win.stripTileH + 10) - win.scrollOf(lp.kind)
+                                  : win.stripTop + Math.floor(index / 2) * (win.stripTileH + 10)
                     width: win.tileW; height: win.stripTileH
-                    visible: win.tileFits(lp.kind, Math.floor(index / 2))
+                    visible: win.narrow || win.tileFits(lp.kind, Math.floor(index / 2))
                     Rectangle { width: parent.width; height: win.stripThumbH; color: "white"
                                 border.width: parent.on ? 7 : 2; border.color: "black" }
                     Image { x: 4; y: 4; width: parent.width - 8; height: win.stripThumbH - 8
@@ -972,6 +1044,15 @@ Window {
                            horizontalAlignment: Text.AlignHCenter; text: modelData.name; elide: Text.ElideRight
                            font.pixelSize: 20; font.bold: true; color: parent.on ? "white" : "black" }
                 }
+            }
+            }
+            Rectangle {  // narrow: where the list is scrolled to, along the panel's outer edge
+                readonly property real total: (lp.isMask ? win.maskList : win.traceList).length * (win.stripTileH + 10)
+                readonly property real h: win.listH(lp.kind)
+                visible: win.narrow && total > h
+                x: lp.side === "right" ? parent.width - 7 : 3; width: 4; radius: 2; color: "black"
+                y: win.stripTop + (total > 0 ? win.scrollOf(lp.kind) / total * h : 0)
+                height: total > 0 ? Math.max(24, h * h / total) : 0
             }
             Rectangle {  // Paper: the pattern under the ink; tap the left half for the previous one, the right half for the next
                 visible: lp.isMask
@@ -1032,6 +1113,9 @@ Window {
                 Text { anchors.fill: parent; anchors.margins: 12; text: win.toast; font.pixelSize: 21; font.bold: true; color: "black"
                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
             }
+            Item {  // narrow: the buttons scroll inside this
+            y: win.narrow ? win.headH : 0; width: parent.width; height: win.narrow ? win.areaOf(panel.side) : parent.height
+            clip: win.narrow
             Repeater {
                 model: Math.max(0, Math.min(16, win.buttons.length - panel.first))
                 Item {
@@ -1043,8 +1127,8 @@ Window {
                                       || (b.kind === "pen" && win.penOut) || (b.kind === "snap" && win.snapOn)
                                       || (b.kind === "trace" && win.traceAdjust) || (b.kind === "light" && win.lightOn)
                                       || (b.kind === "mask" && win.maskInvert)
-                    x: (index % 2) * win.cellW
-                    y: win.headH + Math.floor(index / 2) * win.cellH
+                    x: (index % win.cols) * win.cellW
+                    y: win.narrow ? index * win.cellH - win.scrollOf(panel.side) : win.headH + Math.floor(index / 2) * win.cellH
                     width: win.cellW; height: win.cellH
                     Rectangle {
                         visible: !cell.none
@@ -1066,18 +1150,41 @@ Window {
                     }
                 }
             }
+            }
+            Rectangle {  // narrow: where the buttons are scrolled to, along the panel's outer edge
+                readonly property real total: Math.max(0, Math.min(16, win.buttons.length - panel.first)) * win.cellH
+                readonly property real shown: win.areaOf(panel.side)
+                visible: win.narrow && total > shown
+                x: panel.side === "right" ? parent.width - 7 : 3; width: 4; radius: 2; color: "black"
+                y: win.headH + (total > 0 ? win.scrollOf(panel.side) / total * shown : 0)
+                height: total > 0 ? Math.max(24, shown * shown / total) : 0
+            }
             Rectangle {  // opens the gestures sheet
                 visible: panel.main && win.gesturesOn
                 x: 16; y: win.gBtnY; width: parent.width - 32; height: win.gBtnH; radius: 14
                 border.width: 3; border.color: "black"; color: win.gestureSheet ? "black" : "white"
+                Canvas {  // narrow: one ringed dot, like a touch point, instead of the words
+                    id: fingerIcon
+                    visible: win.narrow
+                    anchors.centerIn: parent; width: 56; height: 56
+                    property bool inv: win.gestureSheet
+                    onInvChanged: requestPaint()
+                    onPaint: {
+                        var c = getContext("2d"), fg = inv ? "white" : "black"
+                        c.reset(); c.lineWidth = 4; c.strokeStyle = fg; c.fillStyle = fg
+                        c.beginPath(); c.arc(28, 28, 20, 0, 2 * Math.PI, false); c.stroke()
+                        c.beginPath(); c.arc(28, 28, 8, 0, 2 * Math.PI, false); c.fill()
+                    }
+                }
                 Text { anchors.centerIn: parent; width: parent.width - 20; horizontalAlignment: Text.AlignHCenter
+                       visible: !win.narrow
                        text: "Finger gestures"; font.pixelSize: 24; font.bold: true; fontSizeMode: Text.HorizontalFit
                        minimumPixelSize: 14; color: win.gestureSheet ? "white" : "black" }
             }
             Item {  // front light: ten steps, black up to the level; the left end turns it off
                 visible: panel.main && win.lightBar
                 x: 16; y: win.lightY - 34; width: parent.width - 32; height: win.lightH + 34
-                Text { x: 6; y: 0; font.pixelSize: 21; font.bold: true; color: "black"
+                Text { x: 6; y: 0; font.pixelSize: 21; font.bold: true; color: "black"; visible: !win.narrow
                        text: win.lightPct > 0 ? "Light " + win.lightPct + "%" : "Light off" }
                 Row {
                     y: 34; height: win.lightH; spacing: 4
@@ -1153,6 +1260,15 @@ Window {
                         var tbx = win.touchBtn; tbx[t.pointId] = -1; win.touchBtn = tbx
                         continue
                     }
+                    var sk = win.scrollKeyAt(p)
+                    if (sk !== "") {  // narrow: a drag scrolls, a tap presses when the finger lifts
+                        var tbd = win.touchBtn; tbd[t.pointId] = -7; win.touchBtn = tbd
+                        var dd = win.drags
+                        dd[t.pointId] = {key: sk, y0: t.y, s0: win.scrollOf(sk), p: p, moved: false, pressed: false, btn: -1}
+                        win.drags = dd
+                        dragHold.restart()
+                        continue
+                    }
                     var u = win.uiAt(p)
                     if (u && u.k !== "keys") {  // a mask or image tile, or their tab: done at once, the finger does nothing more
                         var tbs = win.touchBtn; tbs[t.pointId] = -1; win.touchBtn = tbs
@@ -1175,6 +1291,14 @@ Window {
                 win.gLastEv = Date.now()
                 for (var i = 0; i < pts.length; i++) {
                     var t = pts[i]
+                    if (win.touchBtn[t.pointId] === -7) {  // narrow: scrolling a panel
+                        var dg = win.drags[t.pointId]
+                        if (dg && !dg.pressed) {
+                            if (!dg.moved && Math.abs(t.y - dg.y0) > 16) dg.moved = true
+                            if (dg.moved) win.setScroll(dg.key, dg.s0 - (t.y - dg.y0))
+                        }
+                        continue
+                    }
                     if (win.touchBtn[t.pointId] === -5) {  // a finger sliding along the light bar
                         var lp = Qt.point(t.x, t.y)
                         if (win.lightHit(lp)) win.lightAt(lp)
@@ -1198,6 +1322,15 @@ Window {
                     }
                     if (t.pointId in win.touchBtn) {
                         var tb = win.touchBtn
+                        if (tb[t.pointId] === -7) {
+                            var dr = win.drags, de = dr[t.pointId]
+                            delete dr[t.pointId]; win.drags = dr
+                            if (de && de.pressed) { if (de.btn >= 0) win.releaseBtn(de.btn, false) }
+                            else if (de && !de.moved) {
+                                if (de.key === "mask" || de.key === "trace") win.stripTouch(win.uiAt(de.p), de.p)
+                                else { var bi = win.pressAt(de.p); if (bi >= 0) win.releaseBtn(bi, false) }
+                            }
+                        }
                         if (tb[t.pointId] >= 0) win.releaseBtn(tb[t.pointId], false)
                         delete tb[t.pointId]; win.touchBtn = tb
                         continue
@@ -1209,7 +1342,7 @@ Window {
                 }
                 if (changed) { win.gPts = g; win.fingersChanged(); win.sendTouch() }
             }
-            onCanceled: (pts) => { win.endGesture(); win.gPts = ({}); win.palms = ({}); win.fingersChanged(); win.sendTouch(); win.pressing = -1 }
+            onCanceled: (pts) => { win.drags = ({}); win.endGesture(); win.gPts = ({}); win.palms = ({}); win.fingersChanged(); win.sendTouch(); win.pressing = -1 }
         }
 
         Repeater {  // 9 calibration crosshairs, reading order, 10% inset (matches the PDF sheet)

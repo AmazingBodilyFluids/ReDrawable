@@ -455,3 +455,17 @@ html[data-session="wayland"] .no-wayland { display: none !important; }
 /* the editor's overlay sits on the picture's own panel: the corner tabs under it stay visible and clickable */
 .pm-panel { background:none; pointer-events:none; }
 .pm-panel > * { pointer-events:auto; }
+
+/* setup guide, Paper Pro Move: a tablet panel scrolling under a finger */
+.scroll-hint { display:flex; align-items:center; gap:18px; }
+.sh-panel { position:relative; flex:none; width:58px; height:132px; background:#fff; border:2px solid #000; border-radius:8px; overflow:hidden; }
+.sh-list { position:absolute; left:7px; right:7px; top:8px; display:flex; flex-direction:column; gap:6px; animation:sh-scroll 3.6s ease-in-out infinite; }
+.sh-list i { display:block; height:24px; border:2px solid #000; border-radius:5px; background:#fff; }
+.sh-touch { position:absolute; left:50%; top:96px; width:22px; height:22px; margin-left:-11px; border-radius:50%;
+  border:3px solid var(--accent, #4a8fd8); background:radial-gradient(circle, var(--accent, #4a8fd8) 0 3.5px, rgba(120,170,255,.25) 4.5px);
+  animation:sh-finger 3.6s ease-in-out infinite; }
+@keyframes sh-scroll { 0%,12% { transform:translateY(0) } 45%,62% { transform:translateY(-90px) } 92%,100% { transform:translateY(0) } }
+@keyframes sh-finger { 0%,6% { opacity:0; transform:translateY(0) } 12% { opacity:1; transform:translateY(0) }
+  45% { opacity:1; transform:translateY(-70px) } 52%,60% { opacity:0; transform:translateY(-70px) }
+  62% { opacity:0; transform:translateY(-70px) } 66% { opacity:1; transform:translateY(-70px) } 92% { opacity:1; transform:translateY(0) } 100% { opacity:0; transform:translateY(0) } }
+@media (prefers-reduced-motion: reduce) { .sh-list, .sh-touch { animation:none; } }

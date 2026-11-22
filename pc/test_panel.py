@@ -932,3 +932,32 @@ class LinuxKeys(unittest.TestCase):
         cfg["rotate_keys"] = "r"  # chosen again later: stays
         self.run_on_linux(cfg)
         self.assertEqual(cfg["rotate_keys"], "r")
+
+
+class CalibrationPerModel(unittest.TestCase):
+    """A Paper Pro's calibration doesn't fit a Move: each model keeps its own."""
+
+    def test_swaps_with_the_model(self):
+        e = bare_engine({"companion_rot": "Landscape, left side up", "orientation": "as-calibrated"})
+        pro = {"model": "ferrari", "homography": [1, 0, 0, 0, 1, 0, 0, 0, 1], "swap": True, "flip_u": True}
+        e.calibration, e.calibrations = pro, {}
+        e.set_model(core.devices.MODELS["chiappa"])
+        self.assertIsNone(e.calibration)
+        self.assertEqual(e.calibrations, {"ferrari": pro})
+        self.assertEqual(e.cfg["orientation"], "landscape-cw")  # from the tablet's position until calibrated
+        e.set_model(core.devices.MODELS["ferrari"])
+        self.assertIs(e.calibration, pro)
+        self.assertEqual(e.calibrations, {})
+        self.assertEqual(e.cfg["orientation"], "as-calibrated")
+
+
+class MoveNarrowPanels(unittest.TestCase):
+    """The Move's panels are half as wide with one button across; the other models are unchanged."""
+
+    def test_panel_width_by_model(self):
+        e = bare_engine()
+        for key, px in (("ferrari", 302), ("rm2", 302), ("rm1", 302), ("chiappa", 151)):
+            e.model = core.devices.MODELS[key]
+            self.assertEqual(e.panel_px(), px)
+        self.assertEqual(core.devices.MODELS["chiappa"].panel_cols, 1)
+        self.assertTrue(all(m.panel_cols == 2 for k, m in core.devices.MODELS.items() if k != "chiappa"))

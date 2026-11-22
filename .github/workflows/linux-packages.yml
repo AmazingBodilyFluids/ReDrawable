@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: ReDrawable-0.12.0.flatpak
+          bundle: ReDrawable-0.13.0.flatpak
           manifest-path: linux/flatpak/io.github.amazingbodilyfluids.ReDrawable.yml
           cache-key: flatpak-builder-${{ github.sha }}
           upload-artifact: true
@@ -49,10 +49,10 @@ jobs:
         run: |
           # a desktop's own graphics drivers (the AppImage uses the host's, like on a real PC)
           sudo apt-get install -y --no-install-recommends xvfb x11-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0
-          chmod +x ReDrawable-0.12.0-x86_64.AppImage
+          chmod +x ReDrawable-0.13.0-x86_64.AppImage
           cat > smoke.sh <<'EOF'
           #!/bin/sh
-          APPIMAGE_EXTRACT_AND_RUN=1 REDRAWABLE_SPLASH=0 timeout 40 ./ReDrawable-0.12.0-x86_64.AppImage > run.log 2>&1 &
+          APPIMAGE_EXTRACT_AND_RUN=1 REDRAWABLE_SPLASH=0 timeout 40 ./ReDrawable-0.13.0-x86_64.AppImage > run.log 2>&1 &
           sleep 30
           xwininfo -root -tree | grep -i redrawable
           wait
@@ -63,5 +63,5 @@ jobs:
           grep -q '"ReDrawable": ("redrawable"' windows.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: ReDrawable-0.12.0-x86_64.AppImage
-          path: ReDrawable-0.12.0-x86_64.AppImage
+          name: ReDrawable-0.13.0-x86_64.AppImage
+          path: ReDrawable-0.13.0-x86_64.AppImage
