@@ -1,0 +1,34 @@
+# Publishes the draft release for the version in pc/version.py: tags it on the current main commit
+# and marks it as the latest release. Runs only when this file is pushed with PUBLISH set to that
+# version (or by hand), so publishing is always a deliberate commit.
+name: Publish release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/publish.yml"]
+
+env:
+  PUBLISH: "0.13.0"  # approved by Ted 2026-11-22 10:34Z
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' pc/version.py)
+          [ "$V" = "$PUBLISH" ] || { echo "main is $V, not $PUBLISH"; exit 1; }
+          [ "$(gh release view "v$V" --json isDraft -q .isDraft)" = true ] || { echo "v$V is not a draft"; exit 1; }
+          SHA=$(git rev-parse HEAD)
+          gh release edit "v$V" --tag "v$V" --target "$SHA" --draft=false --latest
+          gh release view "v$V" --json url,isDraft,tagName,assets -q '{url, isDraft, tagName, assets: [.assets[].name]}'
