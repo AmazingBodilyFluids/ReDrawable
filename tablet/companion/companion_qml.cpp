@@ -1163,20 +1163,19 @@ Window {
                 visible: panel.main && win.gesturesOn
                 x: 16; y: win.gBtnY; width: parent.width - 32; height: win.gBtnH; radius: 14
                 border.width: 3; border.color: "black"; color: win.gestureSheet ? "black" : "white"
-                Canvas {  // narrow: a pointing finger instead of the words
+                Canvas {  // narrow: five ringed dots, like touch points, instead of the words
                     id: fingerIcon
                     visible: win.narrow
-                    anchors.centerIn: parent; width: 60; height: 70; scale: 0.82
+                    anchors.centerIn: parent; width: 72; height: 56
                     property bool inv: win.gestureSheet
                     onInvChanged: requestPaint()
                     onPaint: {
-                        var c = getContext("2d"), fg = inv ? "white" : "black", bg = inv ? "black" : "white"
-                        c.reset(); c.lineWidth = 4; c.lineJoin = "round"; c.strokeStyle = fg; c.fillStyle = bg
-                        c.beginPath(); c.moveTo(22, 40); c.lineTo(22, 10); c.arc(28, 10, 6, Math.PI, 2 * Math.PI, false)
-                        c.lineTo(34, 32); c.arc(38.5, 32, 4.5, Math.PI, 2 * Math.PI, false); c.arc(47.5, 32, 4.5, Math.PI, 2 * Math.PI, false)
-                        c.lineTo(52, 56); c.quadraticCurveTo(52, 68, 40, 68); c.lineTo(24, 68); c.quadraticCurveTo(12, 68, 10, 58)
-                        c.lineTo(7, 47); c.quadraticCurveTo(6, 41, 12, 41); c.lineTo(22, 46); c.closePath(); c.fill(); c.stroke()
-                        c.beginPath(); c.moveTo(34, 32); c.lineTo(34, 42); c.moveTo(43, 32); c.lineTo(43, 42); c.stroke()
+                        var c = getContext("2d"), fg = inv ? "white" : "black", pts = [[9, 45], [21, 19], [36, 10], [51, 15], [63, 29]]
+                        c.reset(); c.lineWidth = 3; c.strokeStyle = fg; c.fillStyle = fg
+                        for (var i = 0; i < pts.length; i++) {
+                            c.beginPath(); c.arc(pts[i][0], pts[i][1], 7.5, 0, 2 * Math.PI, false); c.stroke()
+                            c.beginPath(); c.arc(pts[i][0], pts[i][1], 3, 0, 2 * Math.PI, false); c.fill()
+                        }
                     }
                 }
                 Text { anchors.centerIn: parent; width: parent.width - 20; horizontalAlignment: Text.AlignHCenter

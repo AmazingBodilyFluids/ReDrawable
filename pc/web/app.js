@@ -1252,11 +1252,17 @@ function btnGeo(L, side) {
   const full = narrow && side && L && side !== L.main;
   return { narrow, cols: narrow ? 1 : 2, cw: narrow ? P : P / 2, ch: area / rows, top: 190, area: full ? VH - 190 - 8 : area };
 }
-// narrow: the gestures button shows a pointing finger instead of its words (companion fingerIcon)
-const FINGER_PATH = "M22 40V10A6 6 0 0 1 34 10V32A4.5 4.5 0 0 1 43 32A4.5 4.5 0 0 1 52 32V56Q52 68 40 68H24Q12 68 10 58L7 47Q6 41 12 41L22 46Z";
-const fingerSvg = (sz, inv) => `<svg viewBox="0 0 60 70" style="width:${sz};height:auto;display:block;margin:auto" aria-label="Finger gestures">
-  <path d="${FINGER_PATH}" fill="${inv ? "#000" : "#fff"}" stroke="${inv ? "#fff" : "#000"}" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M34 32V42M43 32V42" stroke="${inv ? "#fff" : "#000"}" stroke-width="4"/></svg>`;
+// narrow: the gestures button shows five ringed dots, like touch points (companion fingerIcon)
+const FINGER_DOTS = [[9, 45], [21, 19], [36, 10], [51, 15], [63, 29]];
+const fingerSvg = (sz, inv) => `<svg viewBox="0 0 72 56" style="width:${sz};height:auto;display:block;margin:auto" aria-label="Finger gestures">
+  ${FINGER_DOTS.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="7.5" fill="none" stroke="${inv ? "#fff" : "#000"}" stroke-width="3"/><circle cx="${x}" cy="${y}" r="3" fill="${inv ? "#fff" : "#000"}"/>`).join("")}</svg>`;
+function fingerDots(ctx, x0, y0, fg) {
+  ctx.lineWidth = 3; ctx.strokeStyle = fg; ctx.fillStyle = fg;
+  for (const [x, y] of FINGER_DOTS) {
+    ctx.beginPath(); ctx.arc(x0 + x, y0 + y, 7.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x0 + x, y0 + y, 3, 0, Math.PI * 2); ctx.fill();
+  }
+}
 // where button i of a side sits (view pixels inside the panel), or null if scrolled out of sight
 function btnRect(geo, i, side) {
   if (!geo.narrow) return { x: (i % 2) * geo.cw, y: geo.top + Math.floor(i / 2) * geo.ch };
@@ -1615,7 +1621,7 @@ const Panel = {
         ${geo.narrow ? `<div class="pm-scroll" style="position:absolute;left:0;top:${px(geo.top)};width:${px(W)};height:${px(geo.area)};overflow:hidden">${cells}</div>
           ${this.btns.length * ch > geo.area ? `<i class="pm-sbar" style="position:absolute;${right ? `left:${px(W - 7)}` : `left:${px(3)}`};top:${px(geo.top + PScroll[this.side] / (this.btns.length * ch) * geo.area)};width:${px(4)};height:${px(Math.max(24, geo.area * geo.area / (this.btns.length * ch)))};background:#000;border-radius:${px(2)}"></i>` : ""}` : cells}
         ${main && S.cfg.gestures !== false ? `<div class="pm-gbtn" title="On the tablet this opens a list of the finger gestures; see Tap gestures here"
-          style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">${geo.narrow ? fingerSvg(px(49), false) : "Finger gestures"}</div>` : ""}
+          style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">${geo.narrow ? fingerSvg(px(72), false) : "Finger gestures"}</div>` : ""}
         ${main && lightShown() ? this.lightRow(px, W, vh) : ""}
       </div>`;
     const ov = $(".pm-ov", wrap);
@@ -2087,11 +2093,7 @@ const Scr = {
       if (c.gestures !== false) {
         this.box(ctx, 16, gy, W - 32, 72, 14, this.sheet ? "#000" : "#fff");
         if (geo.narrow) {
-          const fg = this.sheet ? "#fff" : "#000", bg = this.sheet ? "#000" : "#fff", s = 0.82;
-          ctx.save(); ctx.translate(W / 2 - 30 * s, gy + 36 - 35 * s); ctx.scale(s, s);
-          ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.strokeStyle = fg; ctx.fillStyle = bg;
-          const p = new Path2D(FINGER_PATH); ctx.fill(p); ctx.stroke(p); ctx.stroke(new Path2D("M34 32V42M43 32V42"));
-          ctx.restore();
+          fingerDots(ctx, W / 2 - 36, gy + 36 - 28, this.sheet ? "#fff" : "#000");
         } else this.text(ctx, "Finger gestures", W / 2, gy + 36, W - 52, 24, 14, true, this.sheet ? "#fff" : "#000");
       }
       if (lightShown()) lightBar(ctx, 16, VH - 92, W - 32, this.F);
