@@ -1611,6 +1611,9 @@ class Engine:
         """The layout as the tablet draws it: title, second line, how a press behaves."""
         out = []
         for b in self.buttons():
+            if b["kind"] == "light" and not self.model.frontlight:  # rM1 / rM2: no front light, so no Light button
+                out.append({"t": "", "s": "", "kind": "none"})
+                continue
             kind = {"shortcut": "tap", "clear": "local"}.get(b["kind"], b["kind"])
             sub = {"shortcut": keys.label(b["keys"]), "hold": "holds " + keys.label(b["keys"]),
                    "clear": "tablet ink", "trace": "image", "mask": "invert"}.get(b["kind"], "")
