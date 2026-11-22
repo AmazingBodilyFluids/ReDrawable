@@ -1240,6 +1240,35 @@ $("#wzSkip").onclick = () => Wizard.close();
 // The tablet panel's foot is taller when it carries the front-light bar (companion_qml.cpp footH).
 const lightShown = () => !!(S && S.model && S.model.frontlight);
 const foot = () => lightShown() ? 240 : 120;
+// The Move's panels are half as wide, one button across, and scroll (core.panel_px, companion
+// "cols 1"). PScroll: how far each one is scrolled in the pictures, by the mouse wheel there.
+const narrowPanels = () => !!(S && S.panel_cols === 1);
+const PScroll = { left: 0, right: 0, mask: 0, trace: 0 };
+// the button grid as the tablet lays it out: whole rows of about 120 px show when narrow
+function btnGeo(L) {
+  const P = L ? L.P : S.panel_px, VH = L ? L.VH : S.view[1], area = VH - 190 - foot(), narrow = narrowPanels();
+  const rows = narrow ? Math.max(1, Math.floor(area / 120)) : 8;
+  return { narrow, cols: narrow ? 1 : 2, cw: narrow ? P : P / 2, ch: area / rows, top: 190, area };
+}
+// where button i of a side sits (view pixels inside the panel), or null if scrolled out of sight
+function btnRect(geo, i, side) {
+  if (!geo.narrow) return { x: (i % 2) * geo.cw, y: geo.top + Math.floor(i / 2) * geo.ch };
+  const y = geo.top + i * geo.ch - (PScroll[side] || 0);
+  return y + geo.ch <= geo.top || y >= geo.top + geo.area ? null : { x: 0, y };
+}
+function btnIndexAt(geo, px, y, side) {
+  if (y < geo.top || y >= geo.top + geo.area) return -1;
+  if (geo.narrow) return Math.floor((y - geo.top + (PScroll[side] || 0)) / geo.ch);
+  return Math.floor((y - geo.top) / geo.ch) * 2 + (px < geo.cw ? 0 : 1);
+}
+// scroll a narrow panel by the wheel: true if it took it
+function scrollPanel(key, dy, total, shown) {
+  if (!narrowPanels()) return false;
+  const v = Math.max(0, Math.min(Math.max(0, total - shown), (PScroll[key] || 0) + dy));
+  if (v === PScroll[key]) return true;
+  PScroll[key] = v; Scr.draw(); if (view === "panel") { Panel.sig = ""; Panel.render(); }
+  return true;
+}
 // the light bar as the tablet draws it: "Light N%" over ten steps, black up to the level
 function lightBar(ctx, x, y, w, F) {
   const lv = S.light ?? S.cfg.light_level, pct = lv == null ? -1 : lv;
@@ -1519,10 +1548,8 @@ const Panel = {
     const x = (e.clientX - r.left - g.ox) / g.k, y = (e.clientY - r.top - g.oy) / g.k;
     // a button on the other panel: edit that panel, with the button picked
     const other = this.side === "left" ? "right" : "left";
-    const x0 = other === "right" ? L.VW - L.P : 0, ch = (L.VH - this.HEAD - foot()) / this.ROWS;
-    const row = Math.floor((y - this.HEAD) / ch);
-    if ((other === "left" ? L.wL : L.wR) && x >= x0 && x < x0 + L.P && y >= this.HEAD && row < this.ROWS) {
-      const i = row * 2 + (x - x0 < L.P / 2 ? 0 : 1);
+    const x0 = other === "right" ? L.VW - L.P : 0, i = btnIndexAt(btnGeo(L), x - x0, y, other);
+    if ((other === "left" ? L.wL : L.wR) && x >= x0 && x < x0 + L.P && i >= 0 && i < 16) {
       return () => this.setSide(other).then(() => { this.sel = i; this.sig = ""; this.render(); this.fill(true); });
     }
     const keep = Scr.L;
@@ -1542,6 +1569,8 @@ const Panel = {
         <button class="btn pm-unzoom" hidden data-tip="Back to the whole tablet">Whole tablet</button>`;
       $(".pm-unzoom", wrap).onclick = () => { this.zoomed = false; this.render(); };
       wrap.addEventListener("wheel", e => {
+        const g = this.geo, r = $(".pm-cv", wrap).getBoundingClientRect();
+        if (g && Scr.wheelPanelAt(g, [(e.clientX - r.left - g.ox) / g.k, (e.clientY - r.top - g.oy) / g.k], e.deltaY)) { e.preventDefault(); return; }
         if (!this.zoomed) return;
         e.preventDefault();
         this.zoomY += e.deltaY; this.render();
@@ -1556,13 +1585,15 @@ const Panel = {
     const k = g.k;
     this.geo = g;
     const px = v => (v * k).toFixed(1) + "px";
-    const FOOT = foot(), cw = W / 2, ch = (vh - this.HEAD - FOOT) / this.ROWS;
+    const FOOT = foot(), geo = btnGeo({ P: W, VH: vh }), cw = geo.cw, ch = geo.ch;
     const open = (right ? S.cfg.panel_open_right : S.cfg.panel_open) !== false;
     // like the tablet's Text.HorizontalFit: shrink long text to the button, down to a minimum
     const fit = (t, size, min, em) => Math.max(min, Math.min(size, (cw - 28) / (Math.max(1, String(t).length) * em)));
     let cells = "";
     this.btns.forEach((b, i) => {
-      const x = (i % 2) * cw + 8, y = this.HEAD + Math.floor(i / 2) * ch + 8;
+      const r = btnRect(geo, i, this.side);
+      if (!r) return;
+      const x = r.x + 8, y = r.y + 8 - (geo.narrow ? geo.top : 0);  // narrow: inside the scrolling box
       const none = b.kind === "none";
       cells += `<div class="pm-cell${none ? " none" : ""}${i === this.sel ? " sel" : ""}" draggable="true" data-i="${i}"
         style="left:${px(x)};top:${px(y)};width:${px(cw - 16)};height:${px(ch - 16)};border-radius:${px(14)};border-width:${px(3)}">
@@ -1574,7 +1605,8 @@ const Panel = {
     const panel = `<div class="pm-panel" style="width:${px(W)};height:${px(vh)};${right ? "right:0" : "left:0"}">
         <div class="pm-edge" style="${right ? "left:0" : "right:0"};width:${px(3)}"></div>
         ${this.profRow(px, W, T)}
-        ${cells}
+        ${geo.narrow ? `<div class="pm-scroll" style="position:absolute;left:0;top:${px(geo.top)};width:${px(W)};height:${px(geo.area)};overflow:hidden">${cells}</div>
+          ${this.btns.length * ch > geo.area ? `<i class="pm-sbar" style="position:absolute;${right ? `left:${px(W - 7)}` : `left:${px(3)}`};top:${px(geo.top + PScroll[this.side] / (this.btns.length * ch) * geo.area)};width:${px(4)};height:${px(Math.max(24, geo.area * geo.area / (this.btns.length * ch)))};background:#000;border-radius:${px(2)}"></i>` : ""}` : cells}
         ${main && S.cfg.gestures !== false ? `<div class="pm-gbtn" title="On the tablet this opens a list of the finger gestures; see Tap gestures here"
           style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">Finger gestures</div>` : ""}
         ${main && lightShown() ? this.lightRow(px, W, vh) : ""}
@@ -1606,7 +1638,8 @@ const Panel = {
 
   fill(force) {
     const b = this.btns[this.sel];
-    $("#peTitle").textContent = `Button ${this.sel + 1} · row ${Math.floor(this.sel / 2) + 1}, ${this.sel % 2 ? "right" : "left"}`;
+    $("#peTitle").textContent = narrowPanels() ? `Button ${this.sel + 1}`
+      : `Button ${this.sel + 1} · row ${Math.floor(this.sel / 2) + 1}, ${this.sel % 2 ? "right" : "left"}`;
     $("#peName").value = b.t;
     for (const x of $$("#peKinds button")) x.classList.toggle("on", x.dataset.k === b.kind);
     const keyed = b.kind === "shortcut" || b.kind === "hold";
@@ -2023,17 +2056,24 @@ const Scr = {
       this.triangle(ctx, W - 16 - 16 - 11, this.PROF_Y + this.PROF_H / 2, 22, 30, false);
     }
     // buttons
-    const btns = (right ? c.panel_buttons_right : c.panel_buttons) || [], cw = W / 2, ch = (VH - this.HEAD - foot()) / this.ROWS;
+    const btns = (right ? c.panel_buttons_right : c.panel_buttons) || [], geo = btnGeo(L), cw = geo.cw, ch = geo.ch;
+    if (geo.narrow) { ctx.save(); ctx.beginPath(); ctx.rect(0, geo.top, W, geo.area); ctx.clip(); }
     btns.forEach((b, i) => {
       if (!b || b.kind === "none") return;
+      const r = btnRect(geo, i, side);
+      if (!r) return;
       const on = (b.kind === "pen" && S.output) || (b.kind === "snap" && c.snap) || (b.kind === "trace" && c.trace_adjust)
         || (b.kind === "light" && S.light >= 100) || (b.kind === "mask" && c.mask_invert);
-      const x = (i % 2) * cw + 8, y = this.HEAD + Math.floor(i / 2) * ch + 8, bw = cw - 16, bh = ch - 16;
+      const x = r.x + 8, y = r.y + 8, bw = cw - 16, bh = ch - 16;
       this.box(ctx, x, y, bw, bh, 14, on ? "#000" : "#fff");
       const fg = on ? "#fff" : "#000", sub = Panel.sub(b);
       this.text(ctx, b.t, x + bw / 2, y + bh / 2 - (sub ? 13 : 0), bw - 12, 28, 16, true, fg);
       if (sub) this.text(ctx, sub, x + bw / 2, y + bh / 2 + 17, bw - 12, 18, 12, false, fg);
     });
+    if (geo.narrow) {
+      ctx.restore();
+      this.scrollBar(ctx, right ? W - 7 : 3, geo.top, geo.area, btns.length * ch, PScroll[side]);
+    }
     // foot of the main panel: the gestures button and the light bar
     if (main) {
       const gy = VH - foot() + 24;
@@ -2044,6 +2084,11 @@ const Scr = {
       if (lightShown()) lightBar(ctx, 16, VH - 92, W - 32, this.F);
     }
     ctx.restore();
+  },
+  scrollBar(ctx, x, top, shown, total, at) {  // narrow panels: where the list is scrolled to
+    if (total <= shown) return;
+    ctx.fillStyle = "#000";
+    roundRect(ctx, x, top + (at || 0) / total * shown, 4, Math.max(24, shown * shown / total), 2); ctx.fill();
   },
   gestureBtn(L) {  // where "Finger gestures" sits, in view pixels
     return { x: (L.main === "right" ? L.VW - L.P : 0) + 16, y: L.VH - foot() + 24, w: L.P - 32, h: 72 };
@@ -2070,8 +2115,9 @@ const Scr = {
 
   // the open mask or tracing image panel: two buttons, the pictures two across, the paper under the masks
   listGeo(L, kind) {
-    const tw = (L.P - 36) / 2, thumbH = tw * L.VH / L.VW, tileH = thumbH + 46, paperY = L.VH - 24 - 110;
-    return { tw, thumbH, tileH, paperY, top: 180, bottom: kind === "mask" ? paperY - 10 : L.VH - 10 };
+    const narrow = narrowPanels(), tw = narrow ? L.P - 24 : (L.P - 36) / 2, thumbH = tw * L.VH / L.VW, tileH = thumbH + 46, paperY = L.VH - 24 - 110;
+    // narrow (the Move): one across, Invert / Move over None, the pictures scroll
+    return { narrow, tw, thumbH, tileH, paperY, top: narrow ? 260 : 180, bottom: kind === "mask" ? paperY - 10 : L.VH - 10 };
   },
   listPanel(ctx, L, side, kind) {
     const c = S.cfg, W = L.P, VH = L.VH, right = side === "right", isMask = kind === "mask", g = this.listGeo(L, kind);
@@ -2083,11 +2129,14 @@ const Scr = {
     ctx.fillStyle = "#000"; ctx.fillRect(right ? 0 : W - 3, 0, 3, VH);
     this.box(ctx, 12, 96, g.tw, 70, 12, first ? "#000" : "#fff");
     this.text(ctx, isMask ? "Invert" : "Move", 12 + g.tw / 2, 131, g.tw - 16, 24, 16, true, first ? "#fff" : "#000");
-    this.box(ctx, 24 + g.tw, 96, g.tw, 70, 12, !active ? "#000" : "#fff");
-    this.text(ctx, "None", 24 + g.tw * 1.5, 131, g.tw - 16, 24, 16, true, !active ? "#fff" : "#000");
+    const nx = g.narrow ? 12 : 24 + g.tw, ny = g.narrow ? 176 : 96;
+    this.box(ctx, nx, ny, g.tw, 70, 12, !active ? "#000" : "#fff");
+    this.text(ctx, "None", nx + g.tw / 2, ny + 35, g.tw - 16, 24, 16, true, !active ? "#fff" : "#000");
+    if (g.narrow) { ctx.save(); ctx.beginPath(); ctx.rect(0, g.top, W, g.bottom - g.top); ctx.clip(); }
     list.forEach((m, i) => {
-      const x = 12 + (i % 2) * (g.tw + 12), y = g.top + Math.floor(i / 2) * (g.tileH + 10), on = m.id === active;
-      if (y + g.tileH > g.bottom) return;
+      const x = g.narrow ? 12 : 12 + (i % 2) * (g.tw + 12), on = m.id === active;
+      const y = g.narrow ? g.top + i * (g.tileH + 10) - (PScroll[kind] || 0) : g.top + Math.floor(i / 2) * (g.tileH + 10);
+      if (g.narrow ? y + g.tileH < g.top || y > g.bottom : y + g.tileH > g.bottom) return;
       ctx.fillStyle = "#fff"; ctx.fillRect(x, y, g.tw, g.thumbH);
       const bw = on ? 7 : 2;
       ctx.strokeStyle = "#000"; ctx.lineWidth = bw; ctx.strokeRect(x + bw / 2, y + bw / 2, g.tw - bw, g.thumbH - bw);
@@ -2103,6 +2152,10 @@ const Scr = {
       while (name.length > 1 && ctx.measureText(name).width > g.tw - 8) name = name.slice(0, -2) + "…";
       this.text(ctx, name, x + g.tw / 2, y + g.thumbH + 23, g.tw - 8, 20, 20, true, on ? "#fff" : "#000");
     });
+    if (g.narrow) {
+      ctx.restore();
+      this.scrollBar(ctx, right ? W - 7 : 3, g.top, g.bottom - g.top, list.length * (g.tileH + 10), PScroll[kind]);
+    }
     if (isMask) {  // the paper selector at its foot, as the tablet draws it
       const names = { plain: "Plain", lined: "Lined", squared: "Squared", dots: "Dots", cross: "Crosses", blueprint: "Blueprint", isometric: "Isometric" };
       const paperY = g.paperY;
@@ -2163,6 +2216,29 @@ const Scr = {
     $("#maskMove").classList.toggle("on", this.mode() === "mask");
   },
 
+  // the Move's narrow panels: the wheel over one scrolls it, as a finger drag does on the tablet
+  wheelPanelAt(g, p, dy) {  // the same on another picture (Panel & gestures)
+    const keep = this.L;
+    this.L = g.L;
+    const r = this.wheelPanel(p, dy);
+    this.L = keep;
+    return r;
+  },
+  wheelPanel([x, y], dy) {
+    const L = this.L;
+    if (!L || !narrowPanels()) return false;
+    for (const side of ["left", "right"]) {
+      const open = L.sides[side].open, dx = side === "right" ? L.VW - x : x;
+      if (!open || dx < 0 || dx >= L.P) continue;
+      if (open === "keys") {
+        const geo = btnGeo(L), n = ((side === "right" ? S.cfg.panel_buttons_right : S.cfg.panel_buttons) || []).length;
+        return scrollPanel(side, dy, n * geo.ch, geo.area);
+      }
+      const g = this.listGeo(L, open), n = ((open === "mask" ? S.cfg.masks : S.cfg.traces) || []).length;
+      return scrollPanel(open, dy, n * (g.tileH + 10), g.bottom - g.top);
+    }
+    return false;
+  },
   // view pixels under the mouse
   at(e) {
     const r = $("#scrPreview").getBoundingClientRect();
@@ -2212,6 +2288,7 @@ const Scr = {
       if (this.mode() === "mask") maskCommit(); else this.commit();
     });
     cv.addEventListener("wheel", e => {
+      if (this.wheelPanel(this.at(e), e.deltaY)) { e.preventDefault(); return; }
       if (!onPaper(this.at(e)) || !this.mode()) return;  // otherwise the wheel scrolls the page
       // a touchpad pinch arrives as a wheel with Ctrl held, in much smaller steps than a mouse wheel
       const z = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.00095));
@@ -2247,7 +2324,14 @@ const Scr = {
       }
       if (!sd.open || sd.open === "keys" || dx >= P) continue;
       const kind = sd.open, isMask = kind === "mask", g = this.listGeo(L, kind);
-      const px = side === "right" ? x - (L.VW - P) : x, second = px >= P / 2;
+      const px = side === "right" ? x - (L.VW - P) : x;
+      let second = g.narrow ? y >= 176 && y < 246 : px >= P / 2;
+      if (g.narrow && y >= 96 && y < 246) {
+        if (y >= 166 && y < 176) return null;
+        if (second) return act(isMask ? "maskpick none" : "tracepick none");
+        return isMask ? act("maskinvert") : c.trace_active ? act("traceadjust") : null;
+      }
+      if (g.narrow) second = px >= P / 2;
       if (y >= 96 && y < 166) {
         if (second) return act(isMask ? "maskpick none" : "tracepick none");
         return isMask ? act("maskinvert") : c.trace_active ? act("traceadjust") : null;
@@ -2255,6 +2339,11 @@ const Scr = {
       if (isMask && y >= g.paperY && y < g.paperY + 110) {
         const k = Math.max(0, PAPERS.indexOf(c.paper)), n = PAPERS.length;
         return act("paper " + PAPERS[(k + (second ? 1 : n - 1)) % n]);
+      }
+      if (g.narrow) {
+        if (y < g.top || y >= g.bottom) return null;
+        const j = Math.floor((y - g.top + (PScroll[kind] || 0)) / (g.tileH + 10)), mm = ((isMask ? c.masks : c.traces) || [])[j];
+        return mm && (y - g.top + (PScroll[kind] || 0)) - j * (g.tileH + 10) < g.tileH ? act((isMask ? "maskpick " : "tracepick ") + mm.id) : null;
       }
       const row = Math.floor((y - g.top) / (g.tileH + 10)), m = ((isMask ? c.masks : c.traces) || [])[row * 2 + (second ? 1 : 0)];
       if (m && y >= g.top && y - g.top - row * (g.tileH + 10) < g.tileH && g.top + row * (g.tileH + 10) + g.tileH <= g.bottom)
@@ -2274,9 +2363,9 @@ const Scr = {
         const cw = (P - 32 - 36) / 10, i = Math.min(9, Math.max(0, Math.floor((px - 16) / (cw + 4))));
         return () => api().set_light((i + 1) * 10).then(refresh);
       }
-      const ch = (L.VH - this.HEAD - foot()) / this.ROWS, row = Math.floor((y - this.HEAD) / ch), col = px < P / 2 ? 0 : 1;
-      if (y < this.HEAD || row >= this.ROWS) return null;
-      const i = row * 2 + col, b = ((side === "right" ? c.panel_buttons_right : c.panel_buttons) || [])[i];
+      const i = btnIndexAt(btnGeo(L), px, y, side);
+      if (i < 0 || i >= 16) return null;
+      const b = ((side === "right" ? c.panel_buttons_right : c.panel_buttons) || [])[i];
       if (!b) return null;
       if (b.kind === "pen") return () => { S.output = !S.output; render(); api().set_output(S.output); };
       if (b.kind === "snap") return () => setKey("snap", !c.snap).then(refresh);

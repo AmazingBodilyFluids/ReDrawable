@@ -949,3 +949,15 @@ class CalibrationPerModel(unittest.TestCase):
         self.assertIs(e.calibration, pro)
         self.assertEqual(e.calibrations, {})
         self.assertEqual(e.cfg["orientation"], "as-calibrated")
+
+
+class MoveNarrowPanels(unittest.TestCase):
+    """The Move's panels are half as wide with one button across; the other models are unchanged."""
+
+    def test_panel_width_by_model(self):
+        e = bare_engine()
+        for key, px in (("ferrari", 302), ("rm2", 302), ("rm1", 302), ("chiappa", 151)):
+            e.model = core.devices.MODELS[key]
+            self.assertEqual(e.panel_px(), px)
+        self.assertEqual(core.devices.MODELS["chiappa"].panel_cols, 1)
+        self.assertTrue(all(m.panel_cols == 2 for k, m in core.devices.MODELS.items() if k != "chiappa"))

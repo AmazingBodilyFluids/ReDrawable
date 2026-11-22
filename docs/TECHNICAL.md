@@ -68,7 +68,9 @@ Codename `chiappa`. Nobody working on ReDrawable owns one, so nothing below has 
 | Touch lies like the Paper Pro's (no `QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS`) | Measured by others for the Move | same |
 | Elan touch + pen controller (`elants_spi`), front light at `rm_frontlight`, USB network at 10.11.99.1 | Measured by others | gitman-101111/chiappa README |
 | Developer mode (factory reset, root password under Settings > Help > About) as on the Paper Pro | reMarkable's developer-mode page names only the Paper Pro; the Move having it is reported by others | developer.remarkable.com/documentation/developer-mode; gitman-101111/chiappa |
-| Tilt direction (the Pro's mirrored-Y quirk is assumed), palm size, shortcut panel layout on the smaller screen | **Unknown**: needs one session on a real Move | |
+| Panels: half as wide (151 px), one button across, scrolled by a finger drag (a tap presses on lifting, holding still presses at once); the Mask and Tracing panels likewise one picture across | Built for the Move only (`devices.Model.panel_cols`, the tablet gets `cols 1`); offscreen renders of the Paper Pro, rM2 and rM1 tablet screen and desktop previews are pixel-identical before and after | |
+| Tablet-screen build | Built with the Paper Pro 3.28.0.172 SDK sysroot; loads and runs on its Qt 6.10.3 under qemu (offscreen) | |
+| Tilt direction (the Pro's mirrored-Y quirk is assumed), palm size, how the scrolling panel feels | **Unknown**: needs one session on a real Move | |
 
 ## Tablet screen (companion app)
 

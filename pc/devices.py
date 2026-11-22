@@ -31,6 +31,7 @@ class Model:
     frontlight: bool = False
     developer_mode: bool = False  # SSH needs developer mode (which resets the tablet)
     verified: bool = False  # tested on real hardware
+    panel_cols: int = 2     # buttons across a tablet panel; 1 = half-width panels that scroll (the Move)
 
     @property
     def px_per_mm(self):
@@ -52,7 +53,7 @@ MODELS = {
     # to be the Paper Pro's (same Elan controller family), not measured.
     "chiappa": Model("chiappa", "reMarkable Paper Pro Move", (954, 1696), (91.8, 163.2),
                      "rmpp-pen", "rmpp-companion", invert_tilt_y=True, frontlight=True,
-                     developer_mode=True),
+                     developer_mode=True, panel_cols=1),
     # 10.3", 1404 x 1872 at 226 ppi
     "rm2": Model("rm2", "reMarkable 2", (1404, 1872), (157.8, 210.4),
                  "rmpp-pen-armv7", "rmpp-companion-rm2", pen_rot=270),
