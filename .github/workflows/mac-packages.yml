@@ -46,15 +46,6 @@ jobs:
           cp ~/Library/Application\ Support/ReDrawable/redrawable.log app.log 2>/dev/null || true
           grep "selftest" app.log || true
           grep -v "^  \|^Traceback\|^-----\|ConnectionResetError\|^Exception occurred" app.log 2>/dev/null | tail -40 || true
-          # which windows the app has on screen (the screenshot is in the artifact)
-          python3 - <<'PY' || true
-          import ctypes, ctypes.util, json, subprocess
-          out = subprocess.run(["osascript", "-l", "JavaScript", "-e",
-              'ObjC.import("CoreGraphics"); var l = ObjC.deepUnwrap($.CGWindowListCopyWindowInfo(1, 0));'
-              'JSON.stringify(l.filter(w => /ReDrawable|python/i.test(w.kCGWindowOwnerName)).map(w => [w.kCGWindowOwnerName, w.kCGWindowName || "", w.kCGWindowBounds]))'],
-              capture_output=True, text=True)
-          print("app windows:", out.stdout.strip() or out.stderr.strip())
-          PY
           kill %1 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
