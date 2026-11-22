@@ -1243,6 +1243,8 @@ $("#wzSkip").onclick = () => Wizard.close();
 // The tablet panel's foot is taller when it carries the front-light bar (companion_qml.cpp footH).
 const lightShown = () => !!(S && S.model && S.model.frontlight);
 const foot = () => lightShown() ? 240 : 120;
+// a Light panel button on a tablet without a front light (rM1 / rM2): the tablet leaves its slot empty
+const noLight = b => !!b && b.kind === "light" && !lightShown();
 // The Move's panels are half as wide, one button across, and scroll (core.panel_px, companion
 // "cols 1"). PScroll: how far each one is scrolled in the pictures, by the mouse wheel there.
 const narrowPanels = () => !!(S && S.panel_cols === 1);
@@ -1607,10 +1609,10 @@ const Panel = {
       const r = btnRect(geo, i, this.side);
       if (!r) return;
       const x = r.x + 8, y = r.y + 8 - (geo.narrow ? geo.top : 0);  // narrow: inside the scrolling box
-      const none = b.kind === "none";
+      const none = b.kind === "none" || noLight(b);
       cells += `<div class="pm-cell${none ? " none" : ""}${i === this.sel ? " sel" : ""}" draggable="true" data-i="${i}"
         style="left:${px(x)};top:${px(y)};width:${px(cw - 16)};height:${px(ch - 16)};border-radius:${px(14)};border-width:${px(3)}">
-        ${none ? `<span class="pm-empty" style="font-size:${px(18)}">empty</span>` :
+        ${none ? `<span class="pm-empty" style="font-size:${px(18)}">${noLight(b) ? "no light" : "empty"}</span>` :
         `<b style="font-size:${px(fit(b.t, 28, 16, 0.62))}">${esc(b.t)}</b><span style="font-size:${px(fit(this.sub(b), 18, 12, 0.56))}">${esc(this.sub(b))}</span>`}</div>`;
     });
     const chev = `<svg viewBox="0 0 30 36" style="width:${px(30)};height:${px(36)};transform:rotate(${(right === open) ? 180 : 0}deg)">
@@ -1654,7 +1656,11 @@ const Panel = {
     $("#peTitle").textContent = narrowPanels() ? `Button ${this.sel + 1}`
       : `Button ${this.sel + 1} · row ${Math.floor(this.sel / 2) + 1}, ${this.sel % 2 ? "right" : "left"}`;
     $("#peName").value = b.t;
-    for (const x of $$("#peKinds button")) x.classList.toggle("on", x.dataset.k === b.kind);
+    for (const x of $$("#peKinds button")) {
+      x.classList.toggle("on", x.dataset.k === b.kind);
+      if (x.dataset.k === "light") x.hidden = !lightShown() && b.kind !== "light";  // rM1 / rM2 have no front light
+    }
+    for (const o of $$("#pePreset option")) { const p = this.PRESETS[+o.value]; if (o.value !== "" && p) o.hidden = p[1] === "light" && !lightShown(); }
     const keyed = b.kind === "shortcut" || b.kind === "hold";
     $("#peKeysRow").style.display = keyed ? "" : "none";
     if (force || document.activeElement !== $("#peKeys")) $("#peKeys").value = b.keys;
@@ -2072,7 +2078,7 @@ const Scr = {
     const btns = (right ? c.panel_buttons_right : c.panel_buttons) || [], geo = btnGeo(L, side), cw = geo.cw, ch = geo.ch;
     if (geo.narrow) { ctx.save(); ctx.beginPath(); ctx.rect(0, geo.top, W, geo.area); ctx.clip(); }
     btns.forEach((b, i) => {
-      if (!b || b.kind === "none") return;
+      if (!b || b.kind === "none" || noLight(b)) return;
       const r = btnRect(geo, i, side);
       if (!r) return;
       const on = (b.kind === "pen" && S.output) || (b.kind === "snap" && c.snap) || (b.kind === "trace" && c.trace_adjust)
@@ -2386,7 +2392,7 @@ const Scr = {
       if (b.kind === "snap") return () => setKey("snap", !c.snap).then(refresh);
       if (b.kind === "clear") return () => { api().clear_ink(); Ink.clear(); };
       if (b.kind === "trace") return act("traceadjust");
-      if (b.kind === "light") return act("light");
+      if (b.kind === "light") return lightShown() ? act("light") : null;
       if (b.kind === "mask") return act("maskinvert");
       return null;
     }
