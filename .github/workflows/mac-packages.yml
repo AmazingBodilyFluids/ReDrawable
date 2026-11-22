@@ -40,15 +40,22 @@ jobs:
       - name: Start the app and take a screenshot
         if: always()
         run: |
-          mac/dist/ReDrawable.app/Contents/MacOS/ReDrawable &
+          REDRAWABLE_SELFTEST=1 mac/dist/ReDrawable.app/Contents/MacOS/ReDrawable &
           sleep 25
           screencapture -x app-window.png || true
           cp ~/Library/Application\ Support/ReDrawable/redrawable.log app.log 2>/dev/null || true
-          kill %1 2>/dev/null || true
+          grep "selftest" app.log || true
           grep -v "^  \|^Traceback\|^-----\|ConnectionResetError\|^Exception occurred" app.log 2>/dev/null | tail -40 || true
-          # the screenshot as text in the log too (artifact downloads aren't reachable from everywhere)
-          sips -s format jpeg -s formatOptions 55 -Z 1400 app-window.png --out shot.jpg >/dev/null 2>&1 &&
-            { echo "SHOT-BEGIN"; base64 -i shot.jpg | fold -w 4000; echo "SHOT-END"; } || true
+          # which windows the app has on screen (the screenshot is in the artifact)
+          python3 - <<'PY' || true
+          import ctypes, ctypes.util, json, subprocess
+          out = subprocess.run(["osascript", "-l", "JavaScript", "-e",
+              'ObjC.import("CoreGraphics"); var l = ObjC.deepUnwrap($.CGWindowListCopyWindowInfo(1, 0));'
+              'JSON.stringify(l.filter(w => /ReDrawable|python/i.test(w.kCGWindowOwnerName)).map(w => [w.kCGWindowOwnerName, w.kCGWindowName || "", w.kCGWindowBounds]))'],
+              capture_output=True, text=True)
+          print("app windows:", out.stdout.strip() or out.stderr.strip())
+          PY
+          kill %1 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

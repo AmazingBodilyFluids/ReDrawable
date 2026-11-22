@@ -587,6 +587,15 @@ def main():
                 splash.destroy()
         except Exception:
             pass
+        if os.environ.get("REDRAWABLE_SELFTEST"):  # CI: did the page come up and see its system?
+            time.sleep(4)
+            try:
+                print("selftest:", window.evaluate_js(
+                    "JSON.stringify({os: S && S.os, title: document.title, status: S && S.status && S.status.title,"
+                    " shown_mac_rows: [...document.querySelectorAll('.mac-only')].filter(e => e.offsetParent).length,"
+                    " hidden_nomac: [...document.querySelectorAll('.nomac')].filter(e => !e.offsetParent).length})"), flush=True)
+            except Exception as ex:
+                print("selftest failed:", repr(ex), flush=True)
 
     def on_closing():
         if api._to_tray():
