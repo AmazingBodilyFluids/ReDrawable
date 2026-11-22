@@ -1163,19 +1163,17 @@ Window {
                 visible: panel.main && win.gesturesOn
                 x: 16; y: win.gBtnY; width: parent.width - 32; height: win.gBtnH; radius: 14
                 border.width: 3; border.color: "black"; color: win.gestureSheet ? "black" : "white"
-                Canvas {  // narrow: five ringed dots, like touch points, instead of the words
+                Canvas {  // narrow: one ringed dot, like a touch point, instead of the words
                     id: fingerIcon
                     visible: win.narrow
-                    anchors.centerIn: parent; width: 72; height: 56
+                    anchors.centerIn: parent; width: 56; height: 56
                     property bool inv: win.gestureSheet
                     onInvChanged: requestPaint()
                     onPaint: {
-                        var c = getContext("2d"), fg = inv ? "white" : "black", pts = [[9, 45], [21, 19], [36, 10], [51, 15], [63, 29]]
-                        c.reset(); c.lineWidth = 3; c.strokeStyle = fg; c.fillStyle = fg
-                        for (var i = 0; i < pts.length; i++) {
-                            c.beginPath(); c.arc(pts[i][0], pts[i][1], 7.5, 0, 2 * Math.PI, false); c.stroke()
-                            c.beginPath(); c.arc(pts[i][0], pts[i][1], 3, 0, 2 * Math.PI, false); c.fill()
-                        }
+                        var c = getContext("2d"), fg = inv ? "white" : "black"
+                        c.reset(); c.lineWidth = 4; c.strokeStyle = fg; c.fillStyle = fg
+                        c.beginPath(); c.arc(28, 28, 20, 0, 2 * Math.PI, false); c.stroke()
+                        c.beginPath(); c.arc(28, 28, 8, 0, 2 * Math.PI, false); c.fill()
                     }
                 }
                 Text { anchors.centerIn: parent; width: parent.width - 20; horizontalAlignment: Text.AlignHCenter

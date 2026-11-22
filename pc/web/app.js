@@ -1177,6 +1177,7 @@ const Wizard = {
           <li><div><b>Home</b>: the tablet screen as it will look, with its paper, shapes and ink trail.</div></li>
           <li><div><b>Calibrate</b>: calibrate again, and choose the display and the part of the tablet you draw on.</div></li>
           <li><div><b>Pen feel</b> for pressure, and <b>Panel &amp; gestures</b> for the tablet's three panels (shortcut buttons, pen masks, tracing images) and finger gestures.</div></li>
+          ${S_.cfg.model === "chiappa" ? "<li><div><b>On the tablet</b>: drag the panels up or down with a finger to reach more buttons.</div></li>" : ""}
         </ol>
         <div class="note mt"><svg><use href="#i-info"/></svg><div>${LINUX() ? "Krita, GIMP, Inkscape and Xournal++ get pressure and tilt through their normal tablet support. On Wayland, if Krita ignores the pen, start it with <code>QT_QPA_PLATFORM=xcb krita</code>." : "Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input."}</div></div>`;
     }
@@ -1252,16 +1253,13 @@ function btnGeo(L, side) {
   const full = narrow && side && L && side !== L.main;
   return { narrow, cols: narrow ? 1 : 2, cw: narrow ? P : P / 2, ch: area / rows, top: 190, area: full ? VH - 190 - 8 : area };
 }
-// narrow: the gestures button shows five ringed dots, like touch points (companion fingerIcon)
-const FINGER_DOTS = [[9, 45], [21, 19], [36, 10], [51, 15], [63, 29]];
-const fingerSvg = (sz, inv) => `<svg viewBox="0 0 72 56" style="width:${sz};height:auto;display:block;margin:auto" aria-label="Finger gestures">
-  ${FINGER_DOTS.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="7.5" fill="none" stroke="${inv ? "#fff" : "#000"}" stroke-width="3"/><circle cx="${x}" cy="${y}" r="3" fill="${inv ? "#fff" : "#000"}"/>`).join("")}</svg>`;
+// narrow: the gestures button shows one ringed dot, like a touch point (companion fingerIcon)
+const fingerSvg = (sz, inv) => `<svg viewBox="0 0 56 56" style="width:${sz};height:auto;display:block;margin:auto" aria-label="Finger gestures">
+  <circle cx="28" cy="28" r="20" fill="none" stroke="${inv ? "#fff" : "#000"}" stroke-width="4"/><circle cx="28" cy="28" r="8" fill="${inv ? "#fff" : "#000"}"/></svg>`;
 function fingerDots(ctx, x0, y0, fg) {
-  ctx.lineWidth = 3; ctx.strokeStyle = fg; ctx.fillStyle = fg;
-  for (const [x, y] of FINGER_DOTS) {
-    ctx.beginPath(); ctx.arc(x0 + x, y0 + y, 7.5, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x0 + x, y0 + y, 3, 0, Math.PI * 2); ctx.fill();
-  }
+  ctx.lineWidth = 4; ctx.strokeStyle = fg; ctx.fillStyle = fg;
+  ctx.beginPath(); ctx.arc(x0 + 28, y0 + 28, 20, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x0 + 28, y0 + 28, 8, 0, Math.PI * 2); ctx.fill();
 }
 // where button i of a side sits (view pixels inside the panel), or null if scrolled out of sight
 function btnRect(geo, i, side) {
@@ -1621,7 +1619,7 @@ const Panel = {
         ${geo.narrow ? `<div class="pm-scroll" style="position:absolute;left:0;top:${px(geo.top)};width:${px(W)};height:${px(geo.area)};overflow:hidden">${cells}</div>
           ${this.btns.length * ch > geo.area ? `<i class="pm-sbar" style="position:absolute;${right ? `left:${px(W - 7)}` : `left:${px(3)}`};top:${px(geo.top + PScroll[this.side] / (this.btns.length * ch) * geo.area)};width:${px(4)};height:${px(Math.max(24, geo.area * geo.area / (this.btns.length * ch)))};background:#000;border-radius:${px(2)}"></i>` : ""}` : cells}
         ${main && S.cfg.gestures !== false ? `<div class="pm-gbtn" title="On the tablet this opens a list of the finger gestures; see Tap gestures here"
-          style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">${geo.narrow ? fingerSvg(px(72), false) : "Finger gestures"}</div>` : ""}
+          style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">${geo.narrow ? fingerSvg(px(56), false) : "Finger gestures"}</div>` : ""}
         ${main && lightShown() ? this.lightRow(px, W, vh) : ""}
       </div>`;
     const ov = $(".pm-ov", wrap);
@@ -2093,7 +2091,7 @@ const Scr = {
       if (c.gestures !== false) {
         this.box(ctx, 16, gy, W - 32, 72, 14, this.sheet ? "#000" : "#fff");
         if (geo.narrow) {
-          fingerDots(ctx, W / 2 - 36, gy + 36 - 28, this.sheet ? "#fff" : "#000");
+          fingerDots(ctx, W / 2 - 28, gy + 36 - 28, this.sheet ? "#fff" : "#000");
         } else this.text(ctx, "Finger gestures", W / 2, gy + 36, W - 52, 24, 14, true, this.sheet ? "#fff" : "#000");
       }
       if (lightShown()) lightBar(ctx, 16, VH - 92, W - 32, this.F);
