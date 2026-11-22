@@ -408,7 +408,6 @@ def already_running():
             return True
     if sys.platform.startswith("linux"):
         import fcntl
-        import paths
         main.lock = open(os.path.join(paths.data_dir(), "running.lock"), "w")  # held until exit
         try:
             fcntl.flock(main.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

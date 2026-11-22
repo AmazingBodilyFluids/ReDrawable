@@ -121,7 +121,8 @@ def checks():
         "eraser stroke has pressure 0.5": any(g.get("tilt") == [0.0, 0.0] and abs(g["pressure"] - 0.5) < 0.02 for g in downs),
         "ctrl+z -> z with Command": "z" in by and by["z"]["flags"] & A.NSEventModifierFlagCommand != 0,
         "b -> b, no modifier": "b" in by and by["b"]["flags"] & 0x1F0000 == 0,
-        "shift+] -> ] with Shift": "]" in by and by["]"]["flags"] & A.NSEventModifierFlagShift != 0,
+        # charactersIgnoringModifiers keeps Shift (it reads "}"), so the key code is checked
+        "shift+] -> ] key with Shift": any(g["code"] == 0x1E and g["flags"] & A.NSEventModifierFlagShift for g in keys_down),
         "alt+e -> e with Option": "e" in by and by["e"]["flags"] & A.NSEventModifierFlagOption != 0,
         "win+f1 -> F1 with Control": any(g["code"] == 0x7A and g["flags"] & A.NSEventModifierFlagControl for g in keys_down),
         "pan drag arrives as a plain left drag": len(plain) >= 3,
