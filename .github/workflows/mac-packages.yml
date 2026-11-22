@@ -45,7 +45,10 @@ jobs:
           screencapture -x app-window.png || true
           cp ~/Library/Application\ Support/ReDrawable/redrawable.log app.log 2>/dev/null || true
           kill %1 2>/dev/null || true
-          tail -40 app.log 2>/dev/null || true
+          grep -v "^  \|^Traceback\|^-----\|ConnectionResetError\|^Exception occurred" app.log 2>/dev/null | tail -40 || true
+          # the screenshot as text in the log too (artifact downloads aren't reachable from everywhere)
+          sips -s format jpeg -s formatOptions 55 -Z 1400 app-window.png --out shot.jpg >/dev/null 2>&1 &&
+            { echo "SHOT-BEGIN"; base64 -i shot.jpg | fold -w 4000; echo "SHOT-END"; } || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
