@@ -1051,7 +1051,7 @@ const Wizard = {
   // The Paper Pro and the Move need developer mode (and the reset and backup it brings); the
   // rM1 / rM2 answer on the cable as they are.
   devMode() { return !S || !S.cfg.model || S.cfg.model === "ferrari" || S.cfg.model === "chiappa"; },
-  beta() { return !!S && !!S.cfg.model && S.cfg.model !== "ferrari"; },
+  beta() { return !!S && !!S.cfg.model && S.cfg.model !== "ferrari" && S.cfg.model !== "chiappa"; },  // the Move has its own tester
   open() { this.isOpen = true; this.step = 0; this.msg = null; $("#wizard").classList.add("on"); this.render(); },
   close() { this.isOpen = false; $("#wizard").classList.remove("on"); },
 
@@ -1177,8 +1177,10 @@ const Wizard = {
           <li><div><b>Home</b>: the tablet screen as it will look, with its paper, shapes and ink trail.</div></li>
           <li><div><b>Calibrate</b>: calibrate again, and choose the display and the part of the tablet you draw on.</div></li>
           <li><div><b>Pen feel</b> for pressure, and <b>Panel &amp; gestures</b> for the tablet's three panels (shortcut buttons, pen masks, tracing images) and finger gestures.</div></li>
-          ${S_.cfg.model === "chiappa" ? "<li><div><b>On the tablet</b>: drag the panels up or down with a finger to reach more buttons.</div></li>" : ""}
         </ol>
+        ${S_.cfg.model === "chiappa" ? `<div class="scroll-hint mt">
+          <div class="sh-panel" aria-hidden="true"><div class="sh-list">${"<i></i>".repeat(8)}</div><span class="sh-touch"></span></div>
+          <div><b>Panels scroll</b><div class="muted">Drag up or down with a finger. A tap presses.</div></div></div>` : ""}
         <div class="note mt"><svg><use href="#i-info"/></svg><div>${LINUX() ? "Krita, GIMP, Inkscape and Xournal++ get pressure and tilt through their normal tablet support. On Wayland, if Krita ignores the pen, start it with <code>QT_QPA_PLATFORM=xcb krita</code>." : "Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input."}</div></div>`;
     }
   },
