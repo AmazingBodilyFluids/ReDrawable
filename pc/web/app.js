@@ -47,16 +47,22 @@ async function refresh() {
   render();
 }
 
-// One page for Windows and Linux: elements carry their Linux wording in data-linux (inner HTML) and
-// data-linux-tip (tooltip), and .win-only / .linux-only show on one system only (app.css).
+// One page for Windows, Linux and Mac: elements carry their Linux wording in data-linux (inner HTML) and
+// data-linux-tip (tooltip), their Mac wording in data-mac / data-mac-tip, and .win-only / .linux-only /
+// .mac-only / .nomac show on some systems only (app.css).
 const LINUX = () => !!(S && S.os === "linux");
-const OSDESK = () => LINUX() ? "the desktop" : "Windows";
+const MAC = () => !!(S && S.os === "mac");
+const OSDESK = () => LINUX() ? "the desktop" : MAC() ? "macOS" : "Windows";
 let osDone = false;
 function applyOS() {
   if (osDone || !S) return;
   osDone = true;
   document.documentElement.dataset.os = S.os || "windows";
   document.documentElement.dataset.session = S.session || "";
+  if (MAC()) {
+    for (const el of $$("[data-mac]")) el.innerHTML = el.dataset.mac;
+    for (const el of $$("[data-mac-tip]")) el.dataset.tip = el.dataset.macTip;
+  }
   if (!LINUX()) return;
   Panel.PRESETS = Panel.LINUX_PRESETS;
   $("#pePreset").innerHTML = `<option value="">Choose…</option>` +
@@ -134,8 +140,20 @@ async function allowUinput() {
   } finally { $("#uinputBtn").disabled = false; refresh(); }
 }
 
+async function allowMac() {
+  $("#macPostBtn").disabled = true;
+  try {
+    const r = await api().mac_allow();
+    toast(r.msg);
+  } finally { $("#macPostBtn").disabled = false; refresh(); }
+}
+
 function render() {
   const s = status();
+  if (MAC()) {
+    $("#macPostState").textContent = S.post_ok ? "Allowed" : "Not allowed yet: the pen can't reach the Mac";
+    $("#macPostBtn").hidden = !!S.post_ok;
+  }
   if (LINUX()) {
     $("#uinputState").textContent = S.uinput_ok ? "Allowed" : "Not allowed yet: the pen can't reach the desktop";
     $("#uinputBtn").hidden = !!S.uinput_ok;
@@ -1096,7 +1114,7 @@ const Wizard = {
     switch (this.step) {
       case 0: return `
         <div class="lbl">Welcome</div><h1 class="mt">Turn your reMarkable into a drawing tablet</h1>
-        <p class="lead">Your reMarkable becomes a pen tablet for ${LINUX() ? "Linux" : "Windows"}, with pressure, tilt and the eraser end, and it shows what you draw on its own screen. This guide takes about 15 minutes, once.</p>
+        <p class="lead">Your reMarkable becomes a pen tablet for ${LINUX() ? "Linux" : MAC() ? "your Mac" : "Windows"}, with pressure, tilt and the eraser end, and it shows what you draw on its own screen. This guide takes about 15 minutes, once.</p>
         <div class="illus"><svg viewBox="0 0 300 140" fill="none" stroke-linecap="round" stroke-linejoin="round">
           <rect x="8" y="30" width="120" height="86" rx="7" style="stroke:var(--accent)" stroke-width="1.5"/><rect x="18" y="38" width="100" height="70" style="fill:var(--accent-d)"/>
           <path d="M30 92c14-26 24-26 32-10s18 16 32-14" style="stroke:var(--text)" stroke-width="2"/>
@@ -1138,7 +1156,7 @@ const Wizard = {
         <div class="pane-title mt2">Not working?</div>
         <ol class="steps">
           <li><div>Wake and unlock the tablet. It disconnects while asleep.</div></li>
-          <li><div>Unplug the cable, wait five seconds, plug it back in. ${LINUX() ? "The USB network sometimes needs a second try. Still nothing: see linux/README-linux.md." : "Windows sometimes needs a second try."}</div></li>
+          <li><div>Unplug the cable, wait five seconds, plug it back in. ${LINUX() ? "The USB network sometimes needs a second try. Still nothing: see linux/README-linux.md." : MAC() ? "The tablet should appear in System Settings → Network as a USB network. Still nothing: see mac/README-mac.md." : "Windows sometimes needs a second try."}</div></li>
           <li><div>Try another USB port or cable. Some cables only charge.</div></li>
         </ol>`;
       case 4: return `
@@ -1177,7 +1195,7 @@ const Wizard = {
           <li><div><b>Calibrate</b>: calibrate again, and choose the display and the part of the tablet you draw on.</div></li>
           <li><div><b>Pen feel</b> for pressure, and <b>Panel &amp; gestures</b> for the tablet's three panels (shortcut buttons, pen masks, tracing images) and finger gestures.</div></li>
         </ol>
-        <div class="note mt"><svg><use href="#i-info"/></svg><div>${LINUX() ? "Krita, GIMP, Inkscape and Xournal++ get pressure and tilt through their normal tablet support. On Wayland, if Krita ignores the pen, start it with <code>QT_QPA_PLATFORM=xcb krita</code>." : "Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input."}</div></div>`;
+        <div class="note mt"><svg><use href="#i-info"/></svg><div>${MAC() ? "Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio take pressure and tilt through their normal tablet support. The first time the pen turns on, macOS asks to allow ReDrawable under <b>Accessibility</b>." : LINUX() ? "Krita, GIMP, Inkscape and Xournal++ get pressure and tilt through their normal tablet support. On Wayland, if Krita ignores the pen, start it with <code>QT_QPA_PLATFORM=xcb krita</code>." : "Photoshop: turn on <b>Pen Pressure</b> for brush size or opacity. Krita and Clip Studio: choose <b>Windows Ink</b> as the tablet input."}</div></div>`;
     }
   },
 
@@ -1644,6 +1662,8 @@ const Panel = {
       Slash: "/", Backquote: "`", Minus: "-", Equal: "=", NumpadSubtract: "-",
       ControlLeft: "ctrl", ControlRight: "ctrl", ShiftLeft: "shift", ShiftRight: "shift",
       AltLeft: "alt", AltRight: "alt", MetaLeft: "win", MetaRight: "win",
+      // Mac: Command is the key the shared name "ctrl" sends there, and Control is "win" (macinput.py)
+      ...(MAC() ? { MetaLeft: "ctrl", MetaRight: "ctrl", ControlLeft: "win", ControlRight: "win" } : {}),
     }[code] || null;
   },
 

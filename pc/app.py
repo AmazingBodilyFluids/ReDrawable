@@ -19,7 +19,7 @@ sys.path.insert(0, HERE)
 import paths  # noqa: E402
 
 if (sys.stderr is None or sys.executable.lower().endswith("pythonw.exe")
-        or (sys.platform.startswith("linux") and not sys.stdout.isatty())):  # Linux: started from the app launcher
+        or (sys.platform.startswith(("linux", "darwin")) and not sys.stdout.isatty())):  # started from the app launcher / Finder
     # pythonw has no console: keep errors in a log (where: paths.log_dir)
     sys.stderr = sys.stdout = open(os.path.join(paths.log_dir(), "redrawable.log"), "a", buffering=1, encoding="utf-8")
     print(f"--- started {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -295,7 +295,22 @@ class Api:
         elif sys.platform.startswith("linux"):
             import subprocess
             subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return path
+
+    def mac_allow(self):
+        """Mac: ask for the Accessibility permission the pen and keys need, and open its page in
+        System Settings (macOS only shows its own prompt once)."""
+        import macinput
+        ok = macinput.request_access()
+        if ok:
+            if self._engine and self._engine.connected and not self._engine.output_on:
+                self._engine.set_output(True)
+            return {"ok": True, "msg": "Allowed."}
+        macinput.open_settings()
+        return {"ok": False, "msg": "Turn on ReDrawable in Accessibility, then quit and reopen it."}
 
     def pick_trace_image(self):
         """File dialog for the tracing image; the chosen path, or None."""
@@ -383,9 +398,16 @@ def already_running():
     """One ReDrawable at a time: two would mean two synthetic pens fighting over the cursor.
     A named mutex says whether another copy owns it; if so, ask it to show its window (it may be
     hidden in the tray), or bring an older copy's window forward."""
+    if sys.platform == "darwin":  # Finder keeps one copy of an .app anyway; this covers a checkout too
+        import fcntl
+        main.lock = open(os.path.join(paths.data_dir(), "running.lock"), "w")  # held until exit
+        try:
+            fcntl.flock(main.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return False
+        except OSError:
+            return True
     if sys.platform.startswith("linux"):
         import fcntl
-        import paths
         main.lock = open(os.path.join(paths.data_dir(), "running.lock"), "w")  # held until exit
         try:
             fcntl.flock(main.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -565,6 +587,15 @@ def main():
                 splash.destroy()
         except Exception:
             pass
+        if os.environ.get("REDRAWABLE_SELFTEST"):  # CI: did the page come up and see its system?
+            time.sleep(4)
+            try:
+                print("selftest:", window.evaluate_js(
+                    "JSON.stringify({os: S && S.os, title: document.title, status: S && S.status && S.status.title,"
+                    " shown_mac_rows: [...document.querySelectorAll('.mac-only')].filter(e => e.offsetParent).length,"
+                    " hidden_nomac: [...document.querySelectorAll('.nomac')].filter(e => !e.offsetParent).length})"), flush=True)
+            except Exception as ex:
+                print("selftest failed:", repr(ex), flush=True)
 
     def on_closing():
         if api._to_tray():

@@ -7,6 +7,7 @@ everything stays in `data\\` next to it, so the folder can live on a USB stick a
 nothing behind on the PC.
 """
 import os
+import sys
 
 PC = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(PC)
@@ -26,6 +27,8 @@ def data_dir():
         d = os.path.join(ROOT, "data")
     else:
         base = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), ".config")
+        if sys.platform == "darwin":
+            base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
         d = os.path.join(base, "ReDrawable")
         migrate(os.path.join(base, OLD_NAME), d)
     os.makedirs(d, exist_ok=True)
@@ -61,7 +64,7 @@ def log_dir():
         return data_dir()
     if os.path.exists(os.path.join(ROOT, "installed")) or not os.access(PC, os.W_OK):
         base = os.environ.get("LOCALAPPDATA")
-        if not base:  # Linux (AppImage, Flatpak): with the settings
+        if not base:  # Linux (AppImage, Flatpak), Mac (inside the .app nothing may be written): with the settings
             return data_dir()
         d = os.path.join(base, "ReDrawable")
         os.makedirs(d, exist_ok=True)

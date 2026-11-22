@@ -124,7 +124,7 @@
             <div class="opt mt" style="display:block"><div class="row between"><span class="hint" data-tip="Press hard once. The bar should get near the end.">Full range</span><button class="btn ghost" onclick="api().reset_peak()">Reset</button></div>
               <div class="meter mts"><i id="peakBar"></i></div>
               <div class="readout mts" id="peakText" style="margin:0"></div></div>
-            <div class="hint mts" data-tip="Photoshop: turn on Pen Pressure. Krita, Clip Studio: use Windows Ink." data-linux-tip="Krita, GIMP, Inkscape: pressure comes through their own tablet support. Krita on Wayland ignores the pen? Start it with QT_QPA_PLATFORM=xcb krita"><svg class="ic"><use href="#i-info"/></svg> No pressure in your app?</div>
+            <div class="hint mts" data-tip="Photoshop: turn on Pen Pressure. Krita, Clip Studio: use Windows Ink." data-linux-tip="Krita, GIMP, Inkscape: pressure comes through their own tablet support. Krita on Wayland ignores the pen? Start it with QT_QPA_PLATFORM=xcb krita" data-mac-tip="Photoshop: turn on Pen Pressure. Krita, Clip Studio: pressure comes through their own tablet support."><svg class="ic"><use href="#i-info"/></svg> No pressure in your app?</div>
           </div>
           <div class="pane">
             <div class="pane-title">Pen</div>
@@ -189,7 +189,7 @@
               <div class="kinds" id="peKinds">
                 <button data-k="shortcut" data-tip="Taps a key or combination"><b>Shortcut</b></button>
                 <button data-k="hold" data-tip="Held while you touch it; a quick tap locks it"><b>Hold key</b></button>
-                <button data-k="pen" data-tip="Pauses the pen in Windows" data-linux-tip="Pauses the pen"><b>Pen on/off</b></button>
+                <button data-k="pen" data-tip="Pauses the pen in Windows" data-linux-tip="Pauses the pen" data-mac-tip="Pauses the pen"><b>Pen on/off</b></button>
                 <button data-k="snap" data-tip="Hold-to-snap shapes"><b>Shapes on/off</b></button>
                 <button data-k="clear" data-tip="Only useful if trails are set to stay"><b>Clear ink</b></button>
                 <button data-k="trace" data-tip="Fingers move and zoom the tracing image"><b>Move image</b></button>
@@ -212,7 +212,7 @@
             <div class="pane-title">Finger gestures</div>
             <div class="opt"><div class="tx" data-tip="3 fingers: undo / redo. 2: pan, zoom. 5: rotate, reset, clear. Off while the pen is near."><div class="t1">On</div></div>
               <label class="switch"><input type="checkbox" data-key="gestures"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx" data-tip="Shortcuts: gestures send keys. Windows touch: the tablet acts as a touchscreen and Finger gestures turn off (back on with Shortcuts). Saved with the profile." data-linux-tip="Shortcuts: gestures send keys. Touchscreen: the tablet acts as a touchscreen and Finger gestures turn off (back on with Shortcuts). Saved with the profile."><div class="t1">Finger mode</div></div>
+            <div class="opt nomac"><div class="tx" data-tip="Shortcuts: gestures send keys. Windows touch: the tablet acts as a touchscreen and Finger gestures turn off (back on with Shortcuts). Saved with the profile." data-linux-tip="Shortcuts: gestures send keys. Touchscreen: the tablet acts as a touchscreen and Finger gestures turn off (back on with Shortcuts). Saved with the profile."><div class="t1">Finger mode</div></div>
               <div class="seg" id="profTouch"><button data-v="shortcuts">Shortcuts</button><button data-v="windows" data-linux="Touchscreen">Windows touch</button></div></div>
             <div class="opt"><div class="tx" data-tip="Held for a 5-finger twist. Photoshop: r. Krita, Clip Studio: shift+space." data-linux-tip="Held for a 5-finger twist. Krita: shift+space. Apps that rotate with R: r."><div class="t1">Rotate key</div></div>
               <div class="row"><input class="input mono" id="rotKeys" data-key="rotate_keys" readonly style="width:110px" data-tip="Press Record, then the key">
@@ -287,6 +287,8 @@
             <div class="field mt"><span class="lbl" data-tip="Optional; the app's own key by default">Key file</span><input class="input mono" data-key="key" placeholder="the app's own key"></div>
             <div class="opt linux-only mt"><div class="tx" data-tip="Linux: the pen, keys and gestures are virtual input devices (/dev/uinput). Allowing them adds one system rule and asks for your password once."><div class="t1">Pen device</div><div class="t2" id="uinputState"></div></div>
               <button class="btn" id="uinputBtn" onclick="allowUinput()">Allow</button></div>
+            <div class="opt mac-only mt"><div class="tx" data-tip="The pen, keys and gestures need Privacy &amp; Security → Accessibility. After turning it on there, quit and reopen ReDrawable."><div class="t1">Pen permission</div><div class="t2" id="macPostState"></div></div>
+              <button class="btn" id="macPostBtn" onclick="allowMac()">Allow</button></div>
           </div>
           <div class="pane">
             <div class="pane-title">App</div>
@@ -294,7 +296,7 @@
               <label class="switch"><input type="checkbox" data-key="auto_connect"><span class="track"></span></label></div>
             <div class="opt"><div class="tx" data-tip="Sends the pen to this computer right after connecting. Unplug to get your notebooks back."><div class="t1">Pen on when connected</div></div>
               <label class="switch"><input type="checkbox" data-key="auto_output"><span class="track"></span></label></div>
-            <div class="opt"><div class="tx" data-tip="Closing the window keeps the pen working." data-linux-tip="Closing the window (also Super+W) keeps the pen working. Needs a tray, e.g. waybar's; without one, closing quits."><div class="t1">Close to tray</div></div>
+            <div class="opt nomac"><div class="tx" data-tip="Closing the window keeps the pen working." data-linux-tip="Closing the window (also Super+W) keeps the pen working. Needs a tray, e.g. waybar's; without one, closing quits."><div class="t1">Close to tray</div></div>
               <label class="switch"><input type="checkbox" data-key="close_to_tray"><span class="track"></span></label></div>
             <details class="disclose">
               <summary><div class="tx"><div class="t1">Theme</div><div class="t2" id="themeName"></div></div>
@@ -320,7 +322,7 @@
   <span class="sb-msg" id="sbMsg"></span>
   <span class="grow"></span>
   <span class="sb-acts">
-    <label class="sb-wifi" data-tip="The pen draws in Windows" data-linux-tip="The pen draws on the desktop">Pen
+    <label class="sb-wifi" data-tip="The pen draws in Windows" data-linux-tip="The pen draws on the desktop" data-mac-tip="The pen draws on the Mac">Pen
       <span class="switch sm"><input type="checkbox" id="sbPen"><span class="track"></span></span></label>
     <label class="sb-wifi" data-tip="Hold the pen still at the end of a stroke to snap it to a clean shape">Shapes
       <span class="switch sm"><input type="checkbox" id="sbSnap"><span class="track"></span></span></label>
