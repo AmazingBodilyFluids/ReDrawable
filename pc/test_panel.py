@@ -7,6 +7,7 @@ import types
 import base64
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 import zlib
@@ -20,8 +21,9 @@ import keys
 class KeyNames(unittest.TestCase):
     def test_parse_and_label(self):
         self.assertEqual(keys.parse("Ctrl + Shift + S"), ["ctrl", "shift", "s"])
-        self.assertEqual(keys.label("ctrl+shift+z"), "Ctrl Shift Z")
-        self.assertEqual(keys.label("ctrl+="), "Ctrl =")
+        ctrl = "Cmd" if sys.platform == "darwin" else "Ctrl"  # Ctrl is sent as Command on a Mac
+        self.assertEqual(keys.label("ctrl+shift+z"), f"{ctrl} Shift Z")
+        self.assertEqual(keys.label("ctrl+="), f"{ctrl} =")
         self.assertEqual(keys.label("pagedown"), "PgDn")
         self.assertEqual(keys.label("bogus"), "")
         for bad in ("", "+", "ctrl+numpadplus"):

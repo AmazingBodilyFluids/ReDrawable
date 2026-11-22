@@ -101,9 +101,7 @@ _DISPLAYS = []  # [(pixel rect l, t, r, b), point origin (x, y), scale]
 
 
 def monitors():
-    """Displays in pixels, main display first. A display at global points (x, y) with scale s
-    sits at (x*s, y*s): rectangles keep the arrangement and, with mixed scales, may leave gaps,
-    which is fine because each one maps back on its own."""
+    """Displays in pixels, main display first (see layout)."""
     global _DISPLAYS
     if Q is None:
         return [(0, 0, 1920, 1080)]
@@ -111,18 +109,28 @@ def monitors():
     if err or not n:
         return [(0, 0, 1920, 1080)]
     main = Q.CGMainDisplayID()
-    found = []
+    shown = []
     for d in sorted(ids[:n], key=lambda d: d != main):
         b = Q.CGDisplayBounds(d)
         mode = Q.CGDisplayCopyDisplayMode(d)
         scale = 1.0
         if mode is not None and Q.CGDisplayModeGetWidth(mode):
             scale = Q.CGDisplayModeGetPixelWidth(mode) / Q.CGDisplayModeGetWidth(mode)
-        x, y, w, h = b.origin.x, b.origin.y, b.size.width, b.size.height
-        rect = (int(round(x * scale)), int(round(y * scale)), int(round((x + w) * scale)), int(round((y + h) * scale)))
-        found.append((rect, (x, y), scale))
-    _DISPLAYS = found
-    return [r for r, _, _ in found]
+        shown.append((b.origin.x, b.origin.y, b.size.width, b.size.height, scale))
+    _DISPLAYS = layout(shown)
+    return [r for r, _, _ in _DISPLAYS]
+
+
+def layout(shown):
+    """[(x, y, w, h, scale)] in global points -> [(pixel rect, point origin, scale)]. Each display
+    is its own size in pixels (points times its scale), placed at its point origin times the
+    largest scale, so displays that don't overlap in points don't overlap in pixels either."""
+    top = max([s for *_, s in shown] or [1.0])
+    out = []
+    for x, y, w, h, s in shown:
+        l, t = int(round(x * top)), int(round(y * top))
+        out.append(((l, t, l + int(round(w * s)), t + int(round(h * s))), (x, y), s))
+    return out
 
 
 def to_points(px, py):

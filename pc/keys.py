@@ -25,7 +25,6 @@ VK.update({str(d): 0x30 + d for d in range(10)})
 VK.update({f"f{n}": 0x6F + n for n in range(1, 25)})
 if sys.platform == "darwin":  # the same names, sent as Mac key codes (macinput): Ctrl is Command, Alt is Option
     import macinput
-    VK = {k: v for k, v in VK.items() if k in macinput.KEYCODE}
 # Keys that need KEYEVENTF_EXTENDEDKEY, or Windows reads them as the numeric keypad.
 EXTENDED = {"delete", "insert", "home", "end", "pageup", "pagedown", "left", "up", "right", "down"}
 MODIFIERS = ("ctrl", "shift", "alt", "win")
@@ -86,7 +85,8 @@ class Keys:
             import linuxinput
             linuxinput.devices().key(name, up)
         elif self._mac:
-            macinput.devices().key(name, up)
+            if name in macinput.KEYCODE:  # F21-F24 don't exist on a Mac
+                macinput.devices().key(name, up)
         elif name in EXTENDED:
             self._send(VK[name], up, True)
         else:
