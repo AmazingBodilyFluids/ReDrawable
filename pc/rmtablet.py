@@ -815,6 +815,9 @@ def monitors():
     if sys.platform.startswith("linux"):
         import linuxinput
         return linuxinput.monitors()
+    if sys.platform == "darwin":
+        import macinput  # pixels: points times each display's scale
+        return macinput.monitors()
     if sys.platform != "win32":
         return [(0, 0, 1920, 1080)]
     from ctypes import wintypes as wt

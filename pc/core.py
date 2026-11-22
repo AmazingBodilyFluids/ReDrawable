@@ -903,7 +903,9 @@ class Engine:
             "snap_last": self.snap_last, "last_action": self.last_action, "held_keys": sorted(self.keys.held),
             "view": self.view_size(), "panel_px": PANEL_PX, "tab_px": TAB_PX,
             "key_names": sorted(keys.VK), "key_labels": keys.LABEL, "default_buttons": DEFAULT_BUTTONS,
-            "os": "linux" if sys.platform.startswith("linux") else "windows" if sys.platform == "win32" else sys.platform,
+            "os": "linux" if sys.platform.startswith("linux") else "windows" if sys.platform == "win32" else
+                  "mac" if sys.platform == "darwin" else sys.platform,
+            "post_ok": __import__("macinput").allowed() if sys.platform == "darwin" else True,
             "session": os.environ.get("XDG_SESSION_TYPE", "") if sys.platform.startswith("linux") else "",
             "uinput_ok": __import__("linuxinput").available() if sys.platform.startswith("linux") else True,
             "default_buttons_right": DEFAULT_BUTTONS_RIGHT, "presets": {p["name"]: {"left": p["buttons"], "right": p["buttons_right"]} for p in PRESETS},
@@ -2107,6 +2109,19 @@ class Engine:
                 self.output_on = False
                 self.set_status("error", f"Couldn't create the virtual pen: {ex}")
                 return None
+        if sys.platform == "darwin":
+            import macinput
+            if not macinput.available():
+                self.output_on = False
+                self.set_status("error", "pyobjc's Quartz is missing, so the pen can't be created.")
+                return None
+            if not macinput.allowed():
+                macinput.request_access()  # macOS asks once and lists ReDrawable under Accessibility
+                self.output_on = False
+                self.set_status("error", "macOS hasn't allowed ReDrawable to control the pointer yet. "
+                                "Settings → Pen permission → Allow, then turn the pen on.")
+                return None
+            return macinput.MacPen()
         if sys.platform != "win32":
             return NullPen()
         try:
@@ -2343,6 +2358,8 @@ class Engine:
         self.set("onboarded", True)
 
     def touch_mode(self):
+        if sys.platform == "darwin":
+            return "shortcuts"  # macOS has no way to inject touches: fingers always send shortcuts
         return self.cfg["panel_profiles"][self.cfg["panel_profile"]].get("touch", "shortcuts")
 
     def on_touch(self, parts):

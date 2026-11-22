@@ -1,0 +1,56 @@
+# Builds the Mac app (ReDrawable.app in a .dmg) for Apple silicon and Intel as downloadable workflow
+# artifacts, and checks on the runner that the pen, keys and drags reach a window as an app sees
+# them. It never publishes a release: that stays a manual step after testing.
+name: Mac packages
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: ["claude/**"]
+    paths: ["pc/**", "tablet/**", "mac/**", ".github/workflows/mac-packages.yml"]
+
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: |
+          python3 -m venv /tmp/ut && /tmp/ut/bin/pip -q install paramiko
+          cd pc && /tmp/ut/bin/python -m unittest test_shapes test_rmtablet test_panel
+      - name: Build the app and the dmg
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mac/build_app.sh
+      - name: Allow the bundled Python to post events (runner only)
+        continue-on-error: true
+        run: |
+          PY=$(ls mac/build/ReDrawable.app/Contents/Resources/python/bin/python3.*[0-9] | head -1)
+          sudo python3 mac/ci_grant.py "$PWD/$PY" "$PWD/mac/build/ReDrawable.app/Contents/MacOS/ReDrawable" "$PWD/mac/dist/ReDrawable.app/Contents/MacOS/ReDrawable" /bin/bash /usr/local/opt/runner/provisioner/provisioner
+      - name: Pen, keys and drag reach a window (bundled Python)
+        run: |
+          mac/build/ReDrawable.app/Contents/Resources/python/bin/python3 mac/check_events.py > check-events.txt 2>&1 || { tail -30 check-events.txt; exit 1; }
+          tail -20 check-events.txt
+      - name: Start the app and take a screenshot
+        if: always()
+        run: |
+          mac/dist/ReDrawable.app/Contents/MacOS/ReDrawable &
+          sleep 25
+          screencapture -x app-window.png || true
+          cp ~/Library/Application\ Support/ReDrawable/redrawable.log app.log 2>/dev/null || true
+          kill %1 2>/dev/null || true
+          tail -40 app.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-${{ matrix.runner }}
+          path: |
+            mac/dist/*.dmg
+            check-events.txt
+            app-window.png
+            app.log

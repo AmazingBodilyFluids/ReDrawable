@@ -23,6 +23,9 @@ VK = {"ctrl": 0x11, "shift": 0x10, "alt": 0x12, "win": 0x5B,
 VK.update({c: ord(c.upper()) for c in string.ascii_lowercase})
 VK.update({str(d): 0x30 + d for d in range(10)})
 VK.update({f"f{n}": 0x6F + n for n in range(1, 25)})
+if sys.platform == "darwin":  # the same names, sent as Mac key codes (macinput): Ctrl is Command, Alt is Option
+    import macinput
+    VK = {k: v for k, v in VK.items() if k in macinput.KEYCODE}
 # Keys that need KEYEVENTF_EXTENDEDKEY, or Windows reads them as the numeric keypad.
 EXTENDED = {"delete", "insert", "home", "end", "pageup", "pagedown", "left", "up", "right", "down"}
 MODIFIERS = ("ctrl", "shift", "alt", "win")
@@ -31,6 +34,8 @@ LABEL = {"ctrl": "Ctrl", "shift": "Shift", "alt": "Alt", "win": "Win", "space": 
          "enter": "Enter", "esc": "Esc", "backspace": "Bksp", "delete": "Del", "insert": "Ins",
          "home": "Home", "end": "End", "pageup": "PgUp", "pagedown": "PgDn", "left": "Left",
          "up": "Up", "right": "Right", "down": "Down"}
+if sys.platform == "darwin":
+    LABEL.update(macinput.LABEL)
 
 # Gesture and built-in actions. Photoshop / Krita / Clip Studio defaults; redo is Ctrl+Shift+Z
 # there (Clip Studio also accepts Ctrl+Y).
@@ -67,6 +72,7 @@ class Keys:
         self.lock = threading.Lock()
         self._send = send or self._keybd
         self._linux = send is None and sys.platform.startswith("linux")
+        self._mac = send is None and sys.platform == "darwin"
 
     @staticmethod
     def _keybd(vk, up, ext=False):
@@ -79,6 +85,8 @@ class Keys:
         if self._linux:
             import linuxinput
             linuxinput.devices().key(name, up)
+        elif self._mac:
+            macinput.devices().key(name, up)
         elif name in EXTENDED:
             self._send(VK[name], up, True)
         else:
@@ -108,7 +116,7 @@ class Keys:
         with self.lock:
             for n in reversed(parse(spec)):
                 if n in self.held:
-                    if n in ("alt", "win"):
+                    if n in ("alt", "win") and not self._mac:
                         # Alt (or Win) pressed and released on its own opens the menu bar (Start
                         # menu); a Ctrl tap in between cancels that (the usual "mask key" trick).
                         self._key("ctrl", False)
@@ -219,7 +227,33 @@ class LinuxMouse(Mouse):
             self.start = None
 
 
+class MacMouse(LinuxMouse):
+    """The same drags as Quartz mouse events (macinput), in the pixels monitors() hands out."""
+
+    def __init__(self):
+        self.dev = _MacDrag()
+        Mouse.__init__(self, send=lambda *a: None, cursor=macinput.cursor_pos)
+
+
+class _MacDrag:
+    """move / button like linuxinput's pointer. The press goes where the last move went: the
+    events are queued, so asking the system for the cursor right after a move can be stale."""
+
+    def __init__(self):
+        self.pos = None
+
+    def move(self, x, y):
+        self.pos = (x, y)
+        macinput.devices().move(x, y)
+
+    def button(self, down):
+        x, y = self.pos or macinput.cursor_pos()
+        macinput.devices().press(down, x, y)
+
+
 def make_mouse():
+    if sys.platform == "darwin":
+        return MacMouse()
     return LinuxMouse() if sys.platform.startswith("linux") else Mouse()
 
 
@@ -232,6 +266,12 @@ def foreground_center():
         if c:
             return c
         l, t, r, b = linuxinput.layout_box()
+        return (l + r) // 2, (t + b) // 2
+    if sys.platform == "darwin":
+        c = macinput.active_window_center()
+        if c:
+            return c
+        l, t, r, b = macinput.monitors()[0]
         return (l + r) // 2, (t + b) // 2
     if sys.platform != "win32":
         return 960, 540
