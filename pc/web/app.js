@@ -1245,11 +1245,18 @@ const foot = () => lightShown() ? 240 : 120;
 const narrowPanels = () => !!(S && S.panel_cols === 1);
 const PScroll = { left: 0, right: 0, mask: 0, trace: 0 };
 // the button grid as the tablet lays it out: whole rows of about 120 px show when narrow
-function btnGeo(L) {
+// (narrow: the side without the gestures button and light bar runs its buttons to the bottom, companion footOf)
+function btnGeo(L, side) {
   const P = L ? L.P : S.panel_px, VH = L ? L.VH : S.view[1], area = VH - 190 - foot(), narrow = narrowPanels();
   const rows = narrow ? Math.max(1, Math.floor(area / 120)) : 8;
-  return { narrow, cols: narrow ? 1 : 2, cw: narrow ? P : P / 2, ch: area / rows, top: 190, area };
+  const full = narrow && side && L && side !== L.main;
+  return { narrow, cols: narrow ? 1 : 2, cw: narrow ? P : P / 2, ch: area / rows, top: 190, area: full ? VH - 190 - 8 : area };
 }
+// narrow: the gestures button shows a pointing finger instead of its words (companion fingerIcon)
+const FINGER_PATH = "M22 40V10A6 6 0 0 1 34 10V32A4.5 4.5 0 0 1 43 32A4.5 4.5 0 0 1 52 32V56Q52 68 40 68H24Q12 68 10 58L7 47Q6 41 12 41L22 46Z";
+const fingerSvg = (sz, inv) => `<svg viewBox="0 0 60 70" style="width:${sz};height:auto;display:block;margin:auto" aria-label="Finger gestures">
+  <path d="${FINGER_PATH}" fill="${inv ? "#000" : "#fff"}" stroke="${inv ? "#fff" : "#000"}" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M34 32V42M43 32V42" stroke="${inv ? "#fff" : "#000"}" stroke-width="4"/></svg>`;
 // where button i of a side sits (view pixels inside the panel), or null if scrolled out of sight
 function btnRect(geo, i, side) {
   if (!geo.narrow) return { x: (i % 2) * geo.cw, y: geo.top + Math.floor(i / 2) * geo.ch };
@@ -1273,7 +1280,7 @@ function scrollPanel(key, dy, total, shown) {
 function lightBar(ctx, x, y, w, F) {
   const lv = S.light ?? S.cfg.light_level, pct = lv == null ? -1 : lv;
   ctx.fillStyle = "#000"; ctx.font = `bold 21px ${F}`; ctx.textBaseline = "top";
-  ctx.fillText(pct > 0 ? `Light ${pct}%` : pct === 0 ? "Light off" : "Light", x + 6, y - 34);
+  if (!narrowPanels()) ctx.fillText(pct > 0 ? `Light ${pct}%` : pct === 0 ? "Light off" : "Light", x + 6, y - 34);
   ctx.textBaseline = "alphabetic";
   const cw = (w - 36) / 10;
   for (let i = 0; i < 10; i++) {
@@ -1536,7 +1543,7 @@ const Panel = {
     let cells = "";
     for (let i = 0; i < 10; i++) cells += `<i style="left:${px(16 + i * (cw + 4))};top:${px(vh - 92)};width:${px(cw)};height:${px(66)};border-width:${px(3)};border-radius:${px(6)};background:${(i + 1) * 10 <= pct ? "#000" : "#fff"}"></i>`;
     return `<div class="pm-light" title="Tap or drag along it on the tablet to set the front light">
-      <b style="left:${px(22)};top:${px(vh - 126)};font-size:${px(21)}">${pct > 0 ? `Light ${pct}%` : pct === 0 ? "Light off" : "Light"}</b>${cells}</div>`;
+      ${narrowPanels() ? "" : `<b style="left:${px(22)};top:${px(vh - 126)};font-size:${px(21)}">${pct > 0 ? `Light ${pct}%` : pct === 0 ? "Light off" : "Light"}</b>`}${cells}</div>`;
   },
 
   canvasClick(e) {  // the parts of the picture drawn by Scr: the other panel, the mask strip, the tabs
@@ -1548,7 +1555,7 @@ const Panel = {
     const x = (e.clientX - r.left - g.ox) / g.k, y = (e.clientY - r.top - g.oy) / g.k;
     // a button on the other panel: edit that panel, with the button picked
     const other = this.side === "left" ? "right" : "left";
-    const x0 = other === "right" ? L.VW - L.P : 0, i = btnIndexAt(btnGeo(L), x - x0, y, other);
+    const x0 = other === "right" ? L.VW - L.P : 0, i = btnIndexAt(btnGeo(L, other), x - x0, y, other);
     if ((other === "left" ? L.wL : L.wR) && x >= x0 && x < x0 + L.P && i >= 0 && i < 16) {
       return () => this.setSide(other).then(() => { this.sel = i; this.sig = ""; this.render(); this.fill(true); });
     }
@@ -1585,7 +1592,7 @@ const Panel = {
     const k = g.k;
     this.geo = g;
     const px = v => (v * k).toFixed(1) + "px";
-    const FOOT = foot(), geo = btnGeo({ P: W, VH: vh }), cw = geo.cw, ch = geo.ch;
+    const FOOT = foot(), geo = btnGeo({ P: W, VH: vh, main: main ? this.side : "" }, this.side), cw = geo.cw, ch = geo.ch;
     const open = (right ? S.cfg.panel_open_right : S.cfg.panel_open) !== false;
     // like the tablet's Text.HorizontalFit: shrink long text to the button, down to a minimum
     const fit = (t, size, min, em) => Math.max(min, Math.min(size, (cw - 28) / (Math.max(1, String(t).length) * em)));
@@ -1608,7 +1615,7 @@ const Panel = {
         ${geo.narrow ? `<div class="pm-scroll" style="position:absolute;left:0;top:${px(geo.top)};width:${px(W)};height:${px(geo.area)};overflow:hidden">${cells}</div>
           ${this.btns.length * ch > geo.area ? `<i class="pm-sbar" style="position:absolute;${right ? `left:${px(W - 7)}` : `left:${px(3)}`};top:${px(geo.top + PScroll[this.side] / (this.btns.length * ch) * geo.area)};width:${px(4)};height:${px(Math.max(24, geo.area * geo.area / (this.btns.length * ch)))};background:#000;border-radius:${px(2)}"></i>` : ""}` : cells}
         ${main && S.cfg.gestures !== false ? `<div class="pm-gbtn" title="On the tablet this opens a list of the finger gestures; see Tap gestures here"
-          style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">Finger gestures</div>` : ""}
+          style="left:${px(16)};top:${px(vh - FOOT + 24)};width:${px(W - 32)};height:${px(72)};border-radius:${px(14)};border-width:${px(3)};font-size:${px(24)}">${geo.narrow ? fingerSvg(px(49), false) : "Finger gestures"}</div>` : ""}
         ${main && lightShown() ? this.lightRow(px, W, vh) : ""}
       </div>`;
     const ov = $(".pm-ov", wrap);
@@ -2056,7 +2063,7 @@ const Scr = {
       this.triangle(ctx, W - 16 - 16 - 11, this.PROF_Y + this.PROF_H / 2, 22, 30, false);
     }
     // buttons
-    const btns = (right ? c.panel_buttons_right : c.panel_buttons) || [], geo = btnGeo(L), cw = geo.cw, ch = geo.ch;
+    const btns = (right ? c.panel_buttons_right : c.panel_buttons) || [], geo = btnGeo(L, side), cw = geo.cw, ch = geo.ch;
     if (geo.narrow) { ctx.save(); ctx.beginPath(); ctx.rect(0, geo.top, W, geo.area); ctx.clip(); }
     btns.forEach((b, i) => {
       if (!b || b.kind === "none") return;
@@ -2079,7 +2086,13 @@ const Scr = {
       const gy = VH - foot() + 24;
       if (c.gestures !== false) {
         this.box(ctx, 16, gy, W - 32, 72, 14, this.sheet ? "#000" : "#fff");
-        this.text(ctx, "Finger gestures", W / 2, gy + 36, W - 52, 24, 14, true, this.sheet ? "#fff" : "#000");
+        if (geo.narrow) {
+          const fg = this.sheet ? "#fff" : "#000", bg = this.sheet ? "#000" : "#fff", s = 0.82;
+          ctx.save(); ctx.translate(W / 2 - 30 * s, gy + 36 - 35 * s); ctx.scale(s, s);
+          ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.strokeStyle = fg; ctx.fillStyle = bg;
+          const p = new Path2D(FINGER_PATH); ctx.fill(p); ctx.stroke(p); ctx.stroke(new Path2D("M34 32V42M43 32V42"));
+          ctx.restore();
+        } else this.text(ctx, "Finger gestures", W / 2, gy + 36, W - 52, 24, 14, true, this.sheet ? "#fff" : "#000");
       }
       if (lightShown()) lightBar(ctx, 16, VH - 92, W - 32, this.F);
     }
@@ -2231,7 +2244,7 @@ const Scr = {
       const open = L.sides[side].open, dx = side === "right" ? L.VW - x : x;
       if (!open || dx < 0 || dx >= L.P) continue;
       if (open === "keys") {
-        const geo = btnGeo(L), n = ((side === "right" ? S.cfg.panel_buttons_right : S.cfg.panel_buttons) || []).length;
+        const geo = btnGeo(L, side), n = ((side === "right" ? S.cfg.panel_buttons_right : S.cfg.panel_buttons) || []).length;
         return scrollPanel(side, dy, n * geo.ch, geo.area);
       }
       const g = this.listGeo(L, open), n = ((open === "mask" ? S.cfg.masks : S.cfg.traces) || []).length;
@@ -2363,7 +2376,7 @@ const Scr = {
         const cw = (P - 32 - 36) / 10, i = Math.min(9, Math.max(0, Math.floor((px - 16) / (cw + 4))));
         return () => api().set_light((i + 1) * 10).then(refresh);
       }
-      const i = btnIndexAt(btnGeo(L), px, y, side);
+      const i = btnIndexAt(btnGeo(L, side), px, y, side);
       if (i < 0 || i >= 16) return null;
       const b = ((side === "right" ? c.panel_buttons_right : c.panel_buttons) || [])[i];
       if (!b) return null;

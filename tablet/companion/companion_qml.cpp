@@ -317,6 +317,9 @@ Window {
     readonly property int rows: 8
     readonly property real cellW: panelPx / cols
     readonly property real btnAreaH: view.height - headH - footH
+    // narrow: the panel without the gestures button and light bar runs its buttons to the bottom
+    function footOf(s) { return narrow && s !== mainSide ? 8 : footH }
+    function areaOf(s) { return view.height - headH - footOf(s) }
     // narrow: whole rows of about 120 px show, the rest scroll
     readonly property int rowsShown: narrow ? Math.max(1, Math.floor(btnAreaH / 120)) : rows
     readonly property real cellH: btnAreaH / rowsShown
@@ -329,7 +332,7 @@ Window {
         }
         var first = key === "right" ? 16 : 0
         var nb = Math.max(0, Math.min(16, buttons.length - first))
-        return Math.max(0, nb * cellH - btnAreaH)
+        return Math.max(0, nb * cellH - areaOf(key))
     }
     function setScroll(key, v) {
         var o = {}
@@ -345,7 +348,7 @@ Window {
         if (!narrow) return ""
         var u = uiAt(p)
         if (!u || u.t !== "body") return ""
-        if (u.k === "keys") return sideOpen(u.s) && p.y >= headH && p.y < view.height - footH ? u.s : ""
+        if (u.k === "keys") return sideOpen(u.s) && p.y >= headH && p.y < view.height - footOf(u.s) ? u.s : ""
         return p.y >= stripTop && p.y < stripTop + listH(u.k) ? u.k : ""
     }
 
@@ -475,7 +478,7 @@ Window {
     }
     function buttonAt(p) {
         var s = panelAt(p)
-        if (s === "" || !sideOpen(s) || p.y < headH || p.y >= view.height - footH) return -1
+        if (s === "" || !sideOpen(s) || p.y < headH || p.y >= view.height - footOf(s)) return -1
         var i = narrow ? Math.floor((p.y - headH + scrollOf(s)) / cellH) + (s === "right" ? 16 : 0)
                        : Math.floor((p.y - headH) / cellH) * 2 + (p.x - sideX(s) >= cellW ? 1 : 0) + (s === "right" ? 16 : 0)
         if (narrow && (i - (s === "right" ? 16 : 0)) >= 16) return -1
@@ -1111,7 +1114,7 @@ Window {
                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
             }
             Item {  // narrow: the buttons scroll inside this
-            y: win.narrow ? win.headH : 0; width: parent.width; height: win.narrow ? win.btnAreaH : parent.height
+            y: win.narrow ? win.headH : 0; width: parent.width; height: win.narrow ? win.areaOf(panel.side) : parent.height
             clip: win.narrow
             Repeater {
                 model: Math.max(0, Math.min(16, win.buttons.length - panel.first))
@@ -1150,23 +1153,41 @@ Window {
             }
             Rectangle {  // narrow: where the buttons are scrolled to, along the panel's outer edge
                 readonly property real total: Math.max(0, Math.min(16, win.buttons.length - panel.first)) * win.cellH
-                visible: win.narrow && total > win.btnAreaH
+                readonly property real shown: win.areaOf(panel.side)
+                visible: win.narrow && total > shown
                 x: panel.side === "right" ? parent.width - 7 : 3; width: 4; radius: 2; color: "black"
-                y: win.headH + (total > 0 ? win.scrollOf(panel.side) / total * win.btnAreaH : 0)
-                height: total > 0 ? Math.max(24, win.btnAreaH * win.btnAreaH / total) : 0
+                y: win.headH + (total > 0 ? win.scrollOf(panel.side) / total * shown : 0)
+                height: total > 0 ? Math.max(24, shown * shown / total) : 0
             }
             Rectangle {  // opens the gestures sheet
                 visible: panel.main && win.gesturesOn
                 x: 16; y: win.gBtnY; width: parent.width - 32; height: win.gBtnH; radius: 14
                 border.width: 3; border.color: "black"; color: win.gestureSheet ? "black" : "white"
+                Canvas {  // narrow: a pointing finger instead of the words
+                    id: fingerIcon
+                    visible: win.narrow
+                    anchors.centerIn: parent; width: 60; height: 70; scale: 0.82
+                    property bool inv: win.gestureSheet
+                    onInvChanged: requestPaint()
+                    onPaint: {
+                        var c = getContext("2d"), fg = inv ? "white" : "black", bg = inv ? "black" : "white"
+                        c.reset(); c.lineWidth = 4; c.lineJoin = "round"; c.strokeStyle = fg; c.fillStyle = bg
+                        c.beginPath(); c.moveTo(22, 40); c.lineTo(22, 10); c.arc(28, 10, 6, Math.PI, 2 * Math.PI, false)
+                        c.lineTo(34, 32); c.arc(38.5, 32, 4.5, Math.PI, 2 * Math.PI, false); c.arc(47.5, 32, 4.5, Math.PI, 2 * Math.PI, false)
+                        c.lineTo(52, 56); c.quadraticCurveTo(52, 68, 40, 68); c.lineTo(24, 68); c.quadraticCurveTo(12, 68, 10, 58)
+                        c.lineTo(7, 47); c.quadraticCurveTo(6, 41, 12, 41); c.lineTo(22, 46); c.closePath(); c.fill(); c.stroke()
+                        c.beginPath(); c.moveTo(34, 32); c.lineTo(34, 42); c.moveTo(43, 32); c.lineTo(43, 42); c.stroke()
+                    }
+                }
                 Text { anchors.centerIn: parent; width: parent.width - 20; horizontalAlignment: Text.AlignHCenter
+                       visible: !win.narrow
                        text: "Finger gestures"; font.pixelSize: 24; font.bold: true; fontSizeMode: Text.HorizontalFit
                        minimumPixelSize: 14; color: win.gestureSheet ? "white" : "black" }
             }
             Item {  // front light: ten steps, black up to the level; the left end turns it off
                 visible: panel.main && win.lightBar
                 x: 16; y: win.lightY - 34; width: parent.width - 32; height: win.lightH + 34
-                Text { x: 6; y: 0; font.pixelSize: 21; font.bold: true; color: "black"
+                Text { x: 6; y: 0; font.pixelSize: 21; font.bold: true; color: "black"; visible: !win.narrow
                        text: win.lightPct > 0 ? "Light " + win.lightPct + "%" : "Light off" }
                 Row {
                     y: 34; height: win.lightH; spacing: 4
