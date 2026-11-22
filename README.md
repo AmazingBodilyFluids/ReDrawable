@@ -1,6 +1,5 @@
 # ReDrawable
-**Turn a reMarkable Paper Pro into a pressure-sensitive pen tablet for Windows and Linux PCs.** The Paper Pro Move,
-reMarkable 2 and 1 are supported in beta.
+**Turn a reMarkable Paper Pro into a pressure-sensitive pen tablet for Windows and Linux PCs.** The Paper Pro Move,reMarkable 2 and 1 are supported in beta.
 
 Plug the tablet in with its USB cable and draw in Photoshop, Krita, Clip Studio, Illustrator and others. You get pressure, tilt, hover and the eraser end + a bunch of QoL features like pressure masks, customisable shortcut panels and paper lining on display for easier writing and graphing, software agnostic "snap to shape", custom finger gestures and more.
 
@@ -17,36 +16,26 @@ Plug the tablet in with its USB cable and draw in Photoshop, Krita, Clip Studio,
 
 ### A real Windows/Linux pen
 
-4096 pressure levels, tilt, hover and the eraser end, at about 500 reports a second. Plug in and the pen and the
-tablet screen start; unplug and the tablet goes back to your notebooks within seconds. Nothing is installed
-permanently on the tablet.
+4096 pressure levels, tilt, hover and the eraser end, at about 500 hz/s polling rate. Plug and play with customizable GUI on the tablet screen; unplug and the tablet goes back to your notebooks within seconds. Nothing is installed permanently on the tablet.
 
 
 ### Shortcut panels with presets
 
-One panel on each side of the tablet, or just one, or none, with 16 buttons each. A button can tap a shortcut,
-hold a key while your finger stays on it (Space to pan, Alt to pick), or switch the pen, shapes, front light or
-mask. Keep named button sets for each app and switch with the arrows at the top of the panel. Photography,
-Typography, Design and Art sets for Photoshop come with it, and *Presets* brings back any you delete. Each
-panel folds away from its corner tab when you want the whole surface.
+One panel on each side of the tablet, or just one, or none, with up to 16 completely customizable shortcuts each any key or key combo, macros WIP. Keep named button sets for each app and switch between them at the top of the panel. 
 
 ![Panel & gestures: both shortcut panels on a live picture of the tablet](docs/screenshots/panel.png)
 
 
 ### Finger gestures
 
-Three-finger swipe for undo and redo, two fingers to pan and pinch to zoom, a five-finger twist to rotate the
-canvas, and tap gestures you can assign. The picture on *Panel & gestures* shows your fingers live, and a
-small duck acts out each gesture as the tablet sends it. Fingers are ignored while the pen is near the screen,
-and palm-sized contacts are always ignored, so a resting hand does nothing.
+Preset: Three-finger swipe for undo and redo, two fingers to pan and pinch to zoom, a five-finger twist to rotate the canvas, but you can freely reassign all gestures to your own convenience. Fingers are ignored while the pen hovering/touching,and palm-sized contacts are always ignored, so a resting hand does nothing.
 
 ![Finger rings and the gesture duck showing a five-finger rotate](docs/screenshots/gestures.png)
 
 
 ### Paper patterns
 
-Lined, squared, dots, crosses, isometric or blueprint paper under your strokes, at the spacing you pick in
-millimetres. Switch it from the app or from the tablet itself.
+Lined, squared, dots, crosses, isometric or blueprint paper under your strokes, at the spacing you pick. nSwitch it from the app or from the tablet itself.
 
 ![The six paper patterns on the tablet screen](docs/screenshots/patterns.png)
 
@@ -54,16 +43,12 @@ millimetres. Switch it from the app or from the tablet itself.
 ### Tracing images
 
 Put a photo or sketch under your strokes and set how strongly it shows. Move and zoom it with your fingers on
-the tablet, or by dragging it on the tablet picture in the app. The front light can go to full while you
-trace and comes back to your level afterwards.
+the tablet, or by dragging it on the tablet picture in the app.
 
 
 ### Pen masks
 
-A mask is a stencil in shades of grey: black ignores the pen, white leaves it alone, and grey either fades the
-pressure or needs a firmer press. Make one from any image, or start from 14 sample masks: rough paper, grain,
-corrugation, hatching, canvas weave, halftone dots, fades and shapes. Move and zoom it, invert it, and set its
-contrast and strength; the tablet picture shows it at the strength it will have. Switch masks from a corner
+A mask is a pressure sensitivity stencil in shades of grey: black ignores the pen, white leaves it alone, and grey either fades the pressure or sets hard threshold on it going through. Make one from any image (opacity=pressure), or start from 14 sample masks: rough paper, grain,corrugation, hatching, canvas weave, halftone dots etc.h; the tablet picture shows it at the strength it will have. Switch masks from a corner
 tab on the tablet.
 
 ![Rough paper, corrugation and star masks on the tablet](docs/screenshots/masks.png)
@@ -74,7 +59,7 @@ tab on the tablet.
 ### Hold to snap
 
 Draw a line, circle, ellipse, triangle, rectangle or polygon, hold the pen still, and it becomes a clean shape,
-as in the tablet's own notebooks.
+as in the tablet's own notebooks. More shapes WIP.
 
 
 ### Calibrate and pen feel
@@ -96,13 +81,12 @@ networks you trust; the cable stays the faster link.
 
 ## Requirements
 
-- A **reMarkable Paper Pro** with **developer mode** turned on. Tested on software 3.29.
-- Or, in beta and not yet tested on real hardware, a **reMarkable Paper Pro Move** with developer mode turned
+- Recommended a **reMarkable Paper Pro** with **developer mode** turned on. Tested on software 3.29.
+- Or, in beta a **reMarkable Paper Pro Move** with developer mode turned
   on, software 3.29.
-- Or, in beta and not yet tested on real hardware, a **reMarkable 2** or **reMarkable 1** on software 3.28 or
-  newer. These need no developer mode. They have no front light, so the light controls do nothing there.
+- Or a **reMarkable 2** or **reMarkable 1** on software 3.28 or newer. These need no developer mode. They have no front light, so the light controls do nothing there.
 - **Windows 10 (1809 or newer) or Windows 11**, and the USB-C cable.
-- **Linux (beta, being tested):** Wayland or X11, set up from source with `linux/setup.sh`. See
+- **Linux (beta):** set up from source with `linux/setup.sh`. See
   [linux/README-linux.md](linux/README-linux.md).
 - The installer and portable version bring everything else with them. Running from source needs Python 3.10+.
 
