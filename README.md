@@ -96,7 +96,7 @@ networks you trust; the cable stays the faster link.
 Download from [Releases](../../releases):
 
 - **`ReDrawable-Setup-x.y.z.exe`** installs for your user account only, with no admin rights. It upgrades an
-  existing Paper Tablet install in place, and your settings move over by themselves.
+  existing installation in place, and your settings move over by themselves.
 - **`ReDrawable-Portable-x.y.z.zip`** needs no installation. Unzip it anywhere, even onto a USB stick, and run
   *ReDrawable*. Settings, calibration and the app's key stay in the `data` folder next to it.
 
