@@ -10,7 +10,7 @@ on:
     paths: [".github/workflows/publish.yml"]
 
 env:
-  PUBLISH: "0.13.0"  # approved by Ted 2026-11-22 10:34Z
+  PUBLISH: "0.13.1"  # approved by Ted 2026-11-22 14:41Z
 
 permissions:
   contents: write
