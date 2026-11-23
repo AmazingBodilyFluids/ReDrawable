@@ -35,7 +35,7 @@ Preset: Three-finger swipe for undo and redo, two fingers to pan and pinch to zo
 
 ### Paper patterns
 
-Lined, squared, dots, crosses, isometric or blueprint paper under your strokes, at the spacing you pick. nSwitch it from the app or from the tablet itself.
+Lined, squared, dots, crosses, isometric or blueprint paper under your strokes, at the spacing you pick. Switch it from the app or from the tablet itself.
 
 ![The six paper patterns on the tablet screen](docs/screenshots/patterns.png)
 
