@@ -961,3 +961,124 @@ class MoveNarrowPanels(unittest.TestCase):
             self.assertEqual(e.panel_px(), px)
         self.assertEqual(core.devices.MODELS["chiappa"].panel_cols, 1)
         self.assertTrue(all(m.panel_cols == 2 for k, m in core.devices.MODELS.items() if k != "chiappa"))
+
+
+class FakePointer:
+    def __init__(self):
+        self.ev = []
+
+    def move(self, dx, dy):
+        self.ev.append(("move", dx, dy))
+
+    def button(self, name, down):
+        self.ev.append((name, down))
+
+    def wheel(self, n):
+        self.ev.append(("wheel", n))
+
+
+class TouchPadMode(unittest.TestCase):
+    def pad(self):
+        import touchpad
+        self.t = [0.0]
+        out = FakePointer()
+        return touchpad.TouchPad(out, clock=lambda: self.t[0]), out
+
+    def test_one_finger_moves_relative(self):
+        p, out = self.pad()
+        p.update({"a": (100, 100)})
+        self.t[0] = 0.05
+        p.update({"a": (130, 90)})
+        self.t[0] = 0.4
+        p.update({})
+        self.assertEqual(out.ev, [("move", 30, -10)])  # long and moved: no click
+
+    def test_speed_and_subpixel_carry(self):
+        p, out = self.pad()
+        p.speed = 0.5
+        p.update({"a": (0, 0)})
+        p.update({"a": (1, 0)})
+        p.update({"a": (2, 0)})
+        self.assertEqual(out.ev, [("move", 1, 0)])
+
+    def test_tap_clicks_two_finger_tap_right_clicks(self):
+        p, out = self.pad()
+        p.update({"a": (10, 10)})
+        self.t[0] = 0.1
+        p.update({})
+        self.assertEqual(out.ev, [("left", True), ("left", False)])
+        out.ev.clear()
+        self.t[0] = 1.0
+        p.update({"a": (10, 10), "b": (60, 10)})
+        self.t[0] = 1.1
+        p.update({})
+        self.assertEqual(out.ev, [("right", True), ("right", False)])
+
+    def test_two_finger_drag_scrolls(self):
+        p, out = self.pad()
+        p.update({"a": (10, 10), "b": (60, 10)})
+        p.update({"a": (10, 100), "b": (60, 100)})
+        self.assertEqual(out.ev, [("wheel", 2)])
+        self.assertNotIn(("move", 0, 90), out.ev)
+
+    def test_tap_then_drag_holds_the_button(self):
+        p, out = self.pad()
+        p.update({"a": (10, 10)})
+        self.t[0] = 0.1
+        p.update({})
+        out.ev.clear()
+        self.t[0] = 0.25
+        p.update({"b": (10, 10)})
+        p.update({"b": (50, 10)})
+        self.t[0] = 0.9
+        p.update({})
+        self.assertEqual(out.ev, [("left", True), ("move", 40, 0), ("left", False)])
+
+    def test_muted_touch_never_clicks(self):
+        p, out = self.pad()
+        p.update({"a": (10, 10)})
+        p.mute()
+        self.assertEqual(out.ev, [])
+
+    def test_engine_keeps_fingers_live_in_native_modes(self):
+        e = bare_engine()
+        for mode, flag in (("shortcuts", "0"), ("windows", "1"), ("touchpad", "1")):
+            e.cfg["panel_profiles"] = [{"name": "A", "buttons": [], "buttons_right": [], "touch": mode}]
+            e.cfg["panel_profile"] = 0
+            e.cfg["gestures"] = mode == "shortcuts"
+            self.assertEqual(e.touch_mode(), mode)
+            self.assertTrue(e.gesture_list())  # the sheet still lists what fingers do
+        self.assertEqual(core.clean_profiles([{"name": "A", "buttons": [], "touch": "touchpad"}], [])[0]["touch"], "touchpad")
+
+
+class PressureSmoothing(unittest.TestCase):
+    def frame(self, x, p, flags=("INRANGE", "INCONTACT", "UPDATE")):
+        return rt.Frame(flags=set(flags), x=x, y=0, pressure=p)
+
+    def test_off_passes_frames_untouched(self):
+        sm = rt.PressureSmoother(0)
+        fs = [self.frame(0, 100, ("INRANGE", "INCONTACT", "DOWN")), self.frame(100, 900)]
+        self.assertIs(sm.feed(fs), fs)
+        self.assertEqual(fs[1].pressure, 900)
+
+    def test_filters_pressure_and_fills_gaps(self):
+        sm = rt.PressureSmoother(1.0)
+        out = sm.feed([self.frame(0, 100, ("INRANGE", "INCONTACT", "DOWN"))])
+        self.assertEqual(out[0].pressure, 100)
+        out = sm.feed([self.frame(30, 1000)])
+        self.assertEqual(out[-1].pressure, 190)  # 100 + 0.1 * 900
+        self.assertEqual([f.x for f in out], [6, 12, 18, 24, 30])  # 30 px apart: 4 frames in between
+        self.assertEqual([f.pressure for f in out], sorted(f.pressure for f in out))
+        out = sm.feed([rt.Frame(flags={"INRANGE", "UP"}, x=30, y=0)])
+        self.assertEqual(len(out), 1)
+        self.assertIsNone(sm.level)
+
+
+class RateBursts(unittest.TestCase):
+    def test_reads_summarised(self):
+        r = core.RateMeter()
+        for i in range(40):
+            r.read(4 if i % 10 else 12, i * 0.008)
+        b = r.burst()
+        self.assertEqual((b["per_read"], b["per_read_max"]), (4, 12))
+        self.assertAlmostEqual(b["wait_ms"], 8.0, places=1)

@@ -364,6 +364,12 @@ class Mapper:
         """A finger at oriented tablet fractions -> monitor pixel (clamped), like the pen."""
         return self._pixel(*self.fit_frac(p, q))
 
+    def frac_to_screen_f(self, p, q):
+        """Like frac_to_screen, unrounded and unclamped: for finger travel (touchpad mode)."""
+        p, q = self.fit_frac(p, q)
+        l, t, r, b = self.monitor
+        return l + p * (r - l - 1), t + q * (b - t - 1)
+
     def to_screen(self, x, y):
         return self._pixel(*self._pq(x, y))
 
@@ -607,6 +613,56 @@ class PenTranslator:
         s = PenState(**vars(s))
         s.touch = touching
         self.prev = s
+        return out
+
+
+class PressureSmoother:
+    """Optional pressure smoothing between the translator and the pen output.
+
+    strength 0 = off (frames pass untouched). Above 0, pressure while in contact follows a
+    one-pole filter (strength 1 = about 10 reports, ~20 ms at the Paper Pro's 500 Hz), and where
+    the pen jumps more than GAP_PX between two reports, in-between frames with stepped position
+    and pressure are added, so an app that draws a straight dab run between reports gets a ramp
+    rather than a step. Hover, down and up frames are never changed."""
+
+    GAP_PX = 6
+    MAX_FILL = 8
+
+    def __init__(self, strength=0.0):
+        self.strength = strength
+        self.level = None   # filtered pressure of the current stroke
+        self.last = None    # last contact frame sent
+
+    def feed(self, frames):
+        if self.strength <= 0:
+            self.level = self.last = None
+            return frames
+        out = []
+        a = 1.0 - 0.9 * min(1.0, self.strength)
+        for f in frames:
+            if "INCONTACT" not in f.flags:
+                self.level = self.last = None
+                out.append(f)
+                continue
+            if self.level is None or "DOWN" in f.flags:
+                self.level = float(f.pressure)
+            else:
+                self.level += a * (f.pressure - self.level)
+            f.pressure = max(1, min(1024, int(round(self.level))))
+            p = self.last
+            if p is not None and "UPDATE" in f.flags and f.eraser == p.eraser:
+                d = math.hypot(f.x - p.x, f.y - p.y)
+                n = min(self.MAX_FILL, int(d // self.GAP_PX))
+                for i in range(1, n):
+                    k = i / n
+                    out.append(Frame(flags=set(f.flags), x=int(round(p.x + (f.x - p.x) * k)),
+                                     y=int(round(p.y + (f.y - p.y) * k)),
+                                     pressure=max(1, int(round(p.pressure + (f.pressure - p.pressure) * k))),
+                                     tilt_x=int(round(p.tilt_x + (f.tilt_x - p.tilt_x) * k)),
+                                     tilt_y=int(round(p.tilt_y + (f.tilt_y - p.tilt_y) * k)),
+                                     eraser=f.eraser, barrel=f.barrel))
+            out.append(f)
+            self.last = f
         return out
 
 

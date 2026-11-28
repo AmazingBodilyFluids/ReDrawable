@@ -27,6 +27,7 @@ import keys
 import penmask
 import paths
 import shapes
+import touchpad
 
 CAL_MODES = {
     "sheet9": {"label": "9 crosshairs on the calibration sheet", "numbers": [1, 2, 3, 4, 5, 6, 7, 8, 9], "inset": 0.1},
@@ -61,6 +62,8 @@ DEFAULTS = {
     # touch contacts bigger than this are a palm; 0 = off. In Qt's units, about 0.75 x the panel's raw
     # TOUCH_MAJOR: measured fingertips 6-16 (raw 8-21), resting palm edge 19-49 (raw 25-63)
     "palm_size": 20,
+    "touchpad_speed": 1.0,
+    "pressure_smooth": 0.0,  # 0 = off; up to 1 = strongest (rt.PressureSmoother)  # touchpad finger mode: cursor pixels per screen pixel of finger travel
     "panel_buttons": None,  # filled from DEFAULT_BUTTONS below; always the active profile's buttons
     "panel_buttons_right": None,  # the same for the right-hand panel (DEFAULT_BUTTONS_RIGHT)
     # named button sets, cycled with the arrows on the tablet panel: [{"name", "buttons"}]
@@ -222,8 +225,10 @@ MASK_KEYS = {"mask_contrast": "contrast", "mask_mode": "mode", "mask_invert": "i
 BUTTON_KINDS = ("shortcut", "hold", "pen", "snap", "clear", "trace", "light", "mask", "none")
 MASK_N = penmask.N
 # fingers: "shortcuts" turns gestures into keys (pan = Space+drag ...); "windows" hands every
-# contact to Windows as real touch, so apps do their own scrolling, zooming and inertia
-TOUCH_MODES = ("shortcuts", "windows")
+# contact to Windows as real touch, so apps do their own scrolling, zooming and inertia; "touchpad"
+# makes the fingers a laptop touchpad (cursor, tap to click, two-finger scroll: touchpad.py)
+TOUCH_MODES = ("shortcuts", "windows", "touchpad")
+NATIVE_TOUCH = ("windows", "touchpad")  # the tablet hands its fingers over and runs no gestures
 PAPERS = ("plain", "lined", "squared", "dots", "cross", "blueprint", "isometric")
 TRACE_MAX_BYTES = 30 * 1024 * 1024
 FRONTLIGHT = "/sys/class/backlight/rm_frontlight"
@@ -367,6 +372,12 @@ class RateMeter:
     def __init__(self, keep=400):
         self.samples = collections.deque(maxlen=keep)  # (tablet time, arrival time)
         self.last = None  # last result with enough samples, kept after the pen leaves
+        self.reads = collections.deque(maxlen=keep)  # (reports in contact in one network read, arrival time)
+
+    def read(self, n, t_arrival):
+        """One network read that carried n reports with the pen down. Reports bunched into few
+        reads reach the app in bursts, which some apps draw as pressure steps on fast strokes."""
+        self.reads.append((n, t_arrival))
 
     def add(self, t_tablet, t_arrival):
         self.samples.append((t_tablet, t_arrival))
@@ -399,7 +410,20 @@ class RateMeter:
                     span += pc[i - 1] - pc[start]
                 start = i
         ph = n / span if span > 0.2 else None
-        return {"tablet": round(th), "pc": round(ph) if ph else None, "n": len(tab)}
+        out = {"tablet": round(th), "pc": round(ph) if ph else None, "n": len(tab)}
+        out.update(self.burst())
+        return out
+
+    def burst(self):
+        """Reports per read (median, most) and the longest wait between reads while drawing
+        (95th percentile, ms; waits over GAP are lifts or pauses, not counted)."""
+        rd = list(self.reads)
+        if len(rd) < 20:
+            return {}
+        per = sorted(n for n, _ in rd)
+        waits = sorted(b - a for (_, a), (_, b) in zip(rd, rd[1:]) if 0 <= b - a < self.GAP)
+        return {"per_read": per[len(per) // 2], "per_read_max": per[-1],
+                "wait_ms": round(1000 * waits[int(len(waits) * 0.95)], 1) if waits else None}
 
 
 class NullPen:
@@ -664,6 +688,7 @@ class Worker(threading.Thread):
         self.stop_flag = threading.Event()
         self.translator = None
         self.snapper = None
+        self.smoother = rt.PressureSmoother()
         self.chan = None
         self.tab = None
         self.connected = False
@@ -728,7 +753,11 @@ class Worker(threading.Thread):
                         self.snapper.tick()
                     continue
                 now = time.monotonic()
+                self.smoother.strength = float(e.cfg.get("pressure_smooth") or 0)
+                in_contact = 0
                 for s in parser.feed(chunk):
+                    if s.in_range and (s.touch or s.pressure > 0):
+                        in_contact += 1
                     self.latest = s
                     self.n += 1
                     self.trail.append((self.n, s))
@@ -749,9 +778,11 @@ class Worker(threading.Thread):
                             frames = self.snapper.feed(s, frames)
                         elif self.snapper.pts or self.snapper.snapped:
                             self.snapper.reset()
-                        for frame in frames:
+                        for frame in self.smoother.feed(frames):
                             pen_out.send(frame)
                     was_down = down
+                if in_contact:
+                    e.rate.read(in_contact, now)
                 if snap:
                     self.snapper.tick()
         except Exception as ex:  # auth, network, helper problems
@@ -847,6 +878,7 @@ class Engine:
         self.gestures_n = 0
         self.trail_seen = 0     # the last pen report the page has had
         self.touch_out = None   # WindowsTouch, made when a profile first uses Windows touch
+        self.touchpad = None    # touchpad.TouchPad, made when a profile first uses touchpad mode
         self.load_masks()
         self.load_traces()
         self.one_open()
@@ -997,6 +1029,10 @@ class Engine:
                     val = DEFAULTS["rotate_keys"]
             if key == "swipe_step":
                 val = max(40, min(400, int(val)))
+            if key == "pressure_smooth":
+                val = max(0.0, min(1.0, float(val)))
+            if key == "touchpad_speed":
+                val = max(0.2, min(3.0, float(val)))
             if key == "panel" and val not in PANEL_SIDES:
                 val = "left"
             if key in ("mask_side", "trace_side") and val not in ("left", "right"):
@@ -1593,10 +1629,14 @@ class Engine:
     def gesture_list(self):
         """The finger gestures as [gesture, what it does] rows: the tablet's gestures sheet and the
         desktop app's picture of it. Taps are listed only when they have keys."""
-        if not self.cfg.get("gestures", True):
+        mode = self.touch_mode()
+        if not self.cfg.get("gestures", True) and mode not in NATIVE_TOUCH:
             return []
-        if self.touch_mode() == "windows":
+        if mode == "windows":
             rows = [["One finger", "Touch on the desktop" if sys.platform.startswith("linux") else "Touch in Windows"], ["Two fingers", "Scroll, pinch to zoom"]]
+        elif mode == "touchpad":
+            rows = [["One finger", "Move the cursor"], ["Tap", "Click"], ["Two-finger tap", "Right-click"],
+                    ["Two fingers, drag", "Scroll"], ["Tap, then drag", "Hold the button down"]]
         else:
             rows = [["3 fingers, swipe left", "Undo"], ["3 fingers, swipe right", "Redo"],
                     ["2 fingers, drag", "Pan the canvas"], ["2 fingers, pinch", "Zoom"]]
@@ -2239,8 +2279,11 @@ class Engine:
         c.send(f"panelopen {int(self.panel_open('left'))} {int(self.panel_open('right'))}")
         self.peek = set()  # the tablet hides the fold buttons again on "panelshow"
         c.send(f"panelshow {self.kind_show('keys')} {self.kind_show('mask')} {self.kind_show('trace')}")
-        c.send(f"gestures {int(bool(self.cfg.get('gestures', True)))} {int(self.cfg.get('swipe_step', 100))} "
-               f"{float(self.cfg.get('palm_size', 0))} {int(self.touch_mode() == 'windows')}")
+        # In Windows touch and touchpad mode the tablet must keep passing fingers on: its own gestures
+        # are off there anyway (nativeTouch), and "gestures 0" would mute every contact.
+        native = self.touch_mode() in NATIVE_TOUCH
+        c.send(f"gestures {int(bool(self.cfg.get('gestures', True)) or native)} {int(self.cfg.get('swipe_step', 100))} "
+               f"{float(self.cfg.get('palm_size', 0))} {int(native)}")
         c.send("buttons " + json.dumps(self.companion_buttons(), separators=(",", ":")))
         c.send("gesturelist " + json.dumps(self.gesture_list(), separators=(",", ":")))
         profs = self.cfg["panel_profiles"]
@@ -2386,6 +2429,13 @@ class Engine:
         except (IndexError, ValueError):
             return
         self.touch = {"live": live, "palms": palms, "pts": [[p, q] for _, p, q in pts], "at": time.time()}
+        if self.touch_mode() == "touchpad" and self.mapper is not None:
+            if self.touch_out:
+                self.touch_out.lift_all()
+            self.on_touchpad(live, pts)
+            return
+        if self.touchpad:
+            self.touchpad.mute()
         if self.touch_mode() != "windows" or self.mapper is None:
             if self.touch_out:
                 self.touch_out.lift_all()
@@ -2403,7 +2453,22 @@ class Engine:
         if self.touch_out:
             self.touch_out.update({cid: self.mapper.frac_to_screen(p, q) for cid, p, q in pts} if live else {})
 
+    def on_touchpad(self, live, pts):
+        if self.touchpad is None:
+            try:
+                self.touchpad = touchpad.TouchPad(touchpad.make_pointer())
+            except OSError as ex:
+                self.set_status("error", f"Touchpad mode isn't available: {ex}")
+                return
+        self.touchpad.speed = float(self.cfg.get("touchpad_speed", 1.0))
+        if not live:
+            self.touchpad.mute()
+            return
+        self.touchpad.update({cid: self.mapper.frac_to_screen_f(p, q) for cid, p, q in pts})
+
     def shutdown(self):
+        if self.touchpad:
+            self.touchpad.close()
         if self.touch_out:
             self.touch_out.close()
         self.mouse.end()

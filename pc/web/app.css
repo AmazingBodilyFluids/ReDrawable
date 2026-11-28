@@ -247,8 +247,11 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:15px; h
 .wz-step.on .n { border-color:var(--accent); color:var(--accent); }
 .wz-step.done { color:var(--dim); }
 .wz-step.done .n { background:var(--accent); border-color:var(--accent); color:var(--bg); }
-.wz-main { padding:32px 36px 26px; display:flex; flex-direction:column; min-height:520px; overflow-y:auto; }
-.wz-body { flex:1; }
+/* Only the page scrolls; Back / Continue stay in view at any window height. The cap is on .wz-main
+   itself: the grid row would otherwise grow past .wizard's max-height and be clipped. */
+.wz-main { padding:32px 36px 26px; display:flex; flex-direction:column; min-height:min(520px, calc(100vh - 92px));
+           max-height:calc(100vh - 92px); overflow:hidden; }
+.wz-body { flex:1 1 auto; min-height:0; overflow-y:auto; margin-right:-12px; padding-right:12px; }
 .wz-body h1 { margin-bottom:8px; }
 .wz-foot { display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:18px; border-top:1px solid var(--border); }
 ol.steps { list-style:none; counter-reset:s; margin-top:18px; display:flex; flex-direction:column; gap:12px; }

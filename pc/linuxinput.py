@@ -301,6 +301,12 @@ class LinuxDevices:
     def button(self, down):
         self.pointer().emit([(EV_KEY, BTN_LEFT, int(down))])
 
+    def press(self, name, down):
+        self.pointer().emit([(EV_KEY, {"left": BTN_LEFT, "right": BTN_RIGHT}[name], int(down))])
+
+    def wheel(self, notches):
+        self.pointer().emit([(EV_REL, REL_WHEEL, int(notches))])
+
     def close(self):
         for d in (self.kbd, self.mouse):
             if d:

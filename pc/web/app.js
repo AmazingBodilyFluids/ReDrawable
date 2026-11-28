@@ -108,6 +108,8 @@ function status() {
 // ------------------------------------------------------------------ render
 
 // The status bar: the tablet, how it is connected, and what needs doing (with the button for it).
+function smoothText(v) { v = +v || 0; return v ? Math.round(v * 100) + "%" : "Off"; }
+
 function statusBar(s) {
   const uncal = S.connected && !S.calibrating && !S.calibration;
   $("#sbDot").className = "dot " + (S.connected && (uncal || !S.output) ? "warn" : s.dot);
@@ -176,6 +178,13 @@ function render() {
   }
   $("#gammaV").textContent = (+S.cfg.gamma).toFixed(2);
   $("#threshV").textContent = Math.round(S.cfg.threshold * 100) + "%";
+  $("#smoothV").textContent = smoothText(S.cfg.pressure_smooth);
+  $("#tpSpeedV").textContent = (+S.cfg.touchpad_speed).toFixed(1) + "×";
+  $("#tpSpeedRow").hidden = S.touch_mode !== "touchpad";
+  const pr = S.pen_rate;
+  $("#rateText").textContent = pr && pr.tablet ? [`Pen ${pr.tablet} Hz`, pr.pc ? `PC ${pr.pc} Hz` : "",
+    pr.per_read ? `${pr.per_read} / ${pr.per_read_max} per read` : "", pr.wait_ms != null ? `wait ≤ ${pr.wait_ms} ms` : ""].filter(Boolean).join(" · ")
+    : "Draw a few fast strokes to measure";
   $("#paperV").textContent = (+S.cfg.paper_mm).toFixed(1).replace(/\.0$/, "") + " mm";
   $("#traceV").textContent = Math.round(S.cfg.trace_opacity * 100) + "%";
   renderTraces();
@@ -280,6 +289,8 @@ document.addEventListener("input", e => {
     if (el.dataset.key === "mask_strength") { $("#maskStrV").textContent = Math.round(v * 100) + "%"; Scr.draw(); }
     if (el.dataset.key === "gamma") $("#gammaV").textContent = v.toFixed(2);
     if (el.dataset.key === "threshold") $("#threshV").textContent = Math.round(v * 100) + "%";
+    if (el.dataset.key === "pressure_smooth") $("#smoothV").textContent = smoothText(v);
+    if (el.dataset.key === "touchpad_speed") $("#tpSpeedV").textContent = v.toFixed(1) + "×";
     drawCurve();
     clearTimeout(el._t);
     el._t = setTimeout(() => api().set(el.dataset.key, v), 120);
@@ -569,7 +580,7 @@ function gestureText() {
   const n = t ? t.pts.length : 0;
   let g = GESTURES[a] || (a.startsWith("tap ") ? `${a.split(" ")[1]}-finger tap ×${a.split(" ")[2]}` : a.startsWith("press ") ? "panel button" : "");
   if (t && n && !t.live) g = `${n} finger${n > 1 ? "s" : ""} muted (pen near or palm)`;
-  else if (n && !g) g = `${n} finger${n > 1 ? "s" : ""} down` + (S.touch_mode === "windows" ? `, sent to ${OSDESK()} as touch` : "");
+  else if (n && !g) g = `${n} finger${n > 1 ? "s" : ""} down` + (S.touch_mode === "windows" ? `, sent to ${OSDESK()} as touch` : S.touch_mode === "touchpad" ? ", touchpad" : "");
   if (t && t.palms) g += (g ? " · " : "") + `${t.palms} palm contact${t.palms > 1 ? "s" : ""} ignored`;
   return g;
 }
@@ -635,8 +646,9 @@ const Duck = {
   // what the caption says when no gesture is showing
   idle() {
     if (!S.connected) return "Connect the tablet to try the gestures";
-    if (S.cfg.gestures === false) return "Finger gestures are off";
+    if (S.cfg.gestures === false && S.touch_mode === "shortcuts") return "Finger gestures are off";
     if (S.touch_mode === "windows") return `Fingers go to ${OSDESK()} as touch`;
+    if (S.touch_mode === "touchpad") return "Fingers work as a touchpad";
     return "";
   },
   canvas(cls) {
@@ -1051,14 +1063,18 @@ const Wizard = {
   // The Paper Pro and the Move need developer mode (and the reset and backup it brings); the
   // rM1 / rM2 answer on the cable as they are.
   devMode() { return !S || !S.cfg.model || S.cfg.model === "ferrari" || S.cfg.model === "chiappa"; },
+  // SSH answering on the cable means developer mode is already on (the Paper Pro and the Move only
+  // serve SSH there in developer mode): the backup and reset steps don't apply.
+  devAlready() { return this.devMode() && !!S && !!S.ssh; },
+  skipDev(step) { return (step === 1 || step === 2) && (!this.devMode() || this.devAlready()); },
   beta() { return !!S && !!S.cfg.model && S.cfg.model !== "ferrari" && S.cfg.model !== "chiappa"; },  // the Move has its own tester
   open() { this.isOpen = true; this.step = 0; this.msg = null; $("#wizard").classList.add("on"); this.render(); },
   close() { this.isOpen = false; $("#wizard").classList.remove("on"); },
 
   canNext() {
     switch (this.step) {
-      case 1: return this.backedUp || !this.devMode();
-      case 2: return this.devOn || !this.devMode();
+      case 1: return this.backedUp || !this.devMode() || this.devAlready();
+      case 2: return this.devOn || !this.devMode() || this.devAlready();
       case 3: return S && S.ssh;
       case 4: return this.keyOk || (S && S.connected);
       default: return true;
@@ -1067,7 +1083,8 @@ const Wizard = {
 
   // re-draw the body only when something it shows has changed, so clicks aren't lost mid-redraw
   sig() {
-    const v = !S ? null : this.step === 0 ? S.cfg.model : this.step === 3 ? [S.link, S.ssh]
+    const v = !S ? null : this.step === 0 ? [S.cfg.model, this.devAlready()]
+      : this.step === 1 || this.step === 2 ? this.devAlready() : this.step === 3 ? [S.link, S.ssh]
       : this.step === 5 ? [S.connected, !!S.calibrating, !!S.calibration, S.calibration && S.calibration.date, Cal.isOpen]
       : this.step === 6 ? [S.cfg.wifi, S.cfg.wifi_host, S.connected, this.wifiBusy, this.wifiMsg] : null;
     return JSON.stringify([this.step, v]);
@@ -1075,8 +1092,9 @@ const Wizard = {
 
   render() {
     const side = $("#wzSide");
-    side.innerHTML = `<div class="lbl">Setup guide</div>` + this.steps.map((t, i) =>
-      `<div class="wz-step ${i === this.step ? "on" : i < this.step ? "done" : ""}"><span class="n">${i < this.step ? "✓" : i + 1}</span>${t}</div>`).join("");
+    side.innerHTML = `<div class="lbl">Setup guide</div>` + this.steps.map((t, i) => {
+      const done = i < this.step || (this.devAlready() && (i === 1 || i === 2));
+      return `<div class="wz-step ${i === this.step ? "on" : done ? "done" : ""}"><span class="n">${done ? "✓" : i + 1}</span>${t}</div>`; }).join("");
     const sig = this.sig();
     if (!this._rendered || this._rendered !== sig) {
       const keep = $("#wzPw") && $("#wzPw").value;
@@ -1087,7 +1105,7 @@ const Wizard = {
     }
     $("#wzBack").style.visibility = this.step ? "visible" : "hidden";
     const last = this.step === this.steps.length - 1;
-    $("#wzNext").textContent = last ? "Start drawing" : this.step === 5 ? (S && S.calibration ? "Continue" : "Skip for now") : "Continue";
+    $("#wzNext").textContent = last ? "Start drawing" : "Continue";
     $("#wzNext").disabled = !this.canNext();
     $("#wzSkip").style.display = last ? "none" : "";
   },
@@ -1097,7 +1115,8 @@ const Wizard = {
     switch (this.step) {
       case 0: return `
         <div class="lbl">Welcome</div><h1 class="mt">Turn your reMarkable into a drawing tablet</h1>
-        <p class="lead">Your reMarkable becomes a pen tablet for ${LINUX() ? "Linux" : "Windows"}, with pressure, tilt and the eraser end, and it shows what you draw on its own screen. This guide takes about 15 minutes, once.</p>
+        <p class="lead">Your reMarkable becomes a pen tablet for ${LINUX() ? "Linux" : "Windows"}, with pressure, tilt and the eraser end, and it shows what you draw on its own screen. This guide takes about ${this.devMode() && !this.devAlready() ? 15 : 5} minutes, once.</p>
+        ${this.devAlready() ? `<div class="note ok mt"><svg><use href="#i-check"/></svg><div>Developer mode is already on. Backup and reset are skipped.</div></div>` : ""}
         <div class="illus"><svg viewBox="0 0 300 140" fill="none" stroke-linecap="round" stroke-linejoin="round">
           <rect x="8" y="30" width="120" height="86" rx="7" style="stroke:var(--accent)" stroke-width="1.5"/><rect x="18" y="38" width="100" height="70" style="fill:var(--accent-d)"/>
           <path d="M30 92c14-26 24-26 32-10s18 16 32-14" style="stroke:var(--text)" stroke-width="2"/>
@@ -1108,9 +1127,11 @@ const Wizard = {
         <div class="seg mt" id="wzModel">${this.MODELS.map(([k, n]) => `<button data-v="${k}" class="${(S_.cfg.model || "ferrari") === k ? "on" : ""}">${n}</button>`).join("")}</div>
         ${!this.beta() ? "" : `<p class="hint mt">Support for the ${this.MODELS.find(m => m[0] === S_.cfg.model)[1]} is new and not yet tested on one. If something is off, the pen's direction or the tablet screen, please report it.</p>`}
         <div class="pane-title mt">You'll need</div>
-        <ol class="steps"><li><div>The tablet, charged, and its USB cable</div></li>${this.devMode() ? "<li><div>Your reMarkable account, for the backup</div></li>" : ""}<li><div>About ${this.devMode() ? 15 : 5} minutes</div></li></ol>`;
+        <ol class="steps"><li><div>The tablet, charged, and its USB cable</div></li>${this.devMode() && !this.devAlready() ? "<li><div>Your reMarkable account, for the backup</div></li>" : ""}<li><div>About ${this.devMode() && !this.devAlready() ? 15 : 5} minutes</div></li></ol>`;
       case 1: return `
         <div class="lbl">Step 1 · Back up</div><h1 class="mt">Make sure your notebooks are in the cloud</h1>
+        ${this.devAlready() ? `<div class="note ok mt"><svg><use href="#i-check"/></svg><div>Developer mode is already on. No reset, so nothing to back up.</div></div>` : ""}
+        ${this.devAlready() ? "" : `<p class="hint">Already in developer mode? Plug the tablet in and this step is skipped.</p>`}
         <p class="lead">Turning on developer mode resets the tablet and <b>erases everything on it</b>. Your notebooks come back from the reMarkable cloud when you sign in again.</p>
         <ol class="steps">
           <li><div>On the tablet, connect to Wi-Fi and check it's signed in to your reMarkable account with sync on.</div></li>
@@ -1121,6 +1142,7 @@ const Wizard = {
         <label class="check"><input type="checkbox" id="wzBackup" ${this.backedUp ? "checked" : ""}><div>My notebooks show up in the reMarkable app. I understand the tablet will be erased and restored from the cloud.</div></label>`;
       case 2: return `
         <div class="lbl">Step 2 · Developer mode</div><h1 class="mt">Turn on developer mode</h1>
+        ${this.devAlready() ? `<div class="note ok mt"><svg><use href="#i-check"/></svg><div>Developer mode is already on. Nothing to do here.</div></div>` : ""}
         <p class="lead">This is reMarkable's official switch that lets a computer talk to the tablet over the cable. On the tablet:</p>
         <ol class="steps">
           <li><div>Open <b>Settings</b>, then go to<div class="path">Software › Advanced › Developer mode</div></div></li>
@@ -1152,11 +1174,11 @@ const Wizard = {
       case 5: {
         const k = S && S.calibration;
         return `
-        <div class="lbl">Step 5 · Calibrate</div><h1 class="mt">Show the app where your pen lands</h1>
-        <p class="lead">Three short steps in their own window: how the tablet lies on your desk, which targets to use, then a tap on each target with the pen.</p>
+        <div class="lbl">Step 5 · Calibrate (optional)</div><h1 class="mt">Show the app where your pen lands</h1>
+        <p class="lead">The pen works without it. Calibrate only if the cursor lands off the pen tip.</p>
         ${k ? `<div class="note ok mt"><svg><use href="#i-check"/></svg><div>Calibrated: ${k.points} points, tablet ${k.landscape ? "landscape" : "portrait"}.</div></div>` : ""}
-        <div class="row mt2"><button class="btn acc lg" id="wzCal" ${!S || !S.connected ? "disabled" : ""}>${S && S.connected ? (k ? "Calibrate again" : "Calibrate") : "Connecting…"}</button></div>
-        <p class="hint mt">You can always redo this from Calibrate.</p>`;
+        <div class="row mt2"><button class="btn lg" id="wzCal" ${!S || !S.connected ? "disabled" : ""}>${S && S.connected ? (k ? "Calibrate again" : "Calibrate") : "Connecting…"}</button></div>
+        <p class="hint mt" data-tip="The tablet's own mapping is used until then. Calibrating fixes small offsets at the edges and how the tablet sits on your desk.">You can do this later from Calibrate.</p>`;
       }
       case 6: {
         const on = !!S_.cfg.wifi, m = this.wifiMsg;
@@ -1226,14 +1248,13 @@ $("#wzNext").onclick = () => {
     return;
   }
   Wizard.step++;
-  if (!Wizard.devMode() && (Wizard.step === 1 || Wizard.step === 2)) Wizard.step = 3;  // no reset, nothing to back up
+  if (Wizard.skipDev(Wizard.step)) Wizard.step = Wizard.devAlready() ? 4 : 3;  // no reset, nothing to back up
   Wizard.render();
-  if (Wizard.step === 5 && S && S.connected && !S.calibration) Cal.open();  // straight into calibrating
 };
 $("#wzBack").onclick = () => {
   if (!Wizard.step) return;
   Wizard.step--;
-  if (!Wizard.devMode() && (Wizard.step === 1 || Wizard.step === 2)) Wizard.step = 0;
+  if (Wizard.skipDev(Wizard.step) || (Wizard.step === 3 && Wizard.devAlready())) Wizard.step = 0;
   Wizard.render();
 };
 $("#wzSkip").onclick = () => Wizard.close();
@@ -1509,7 +1530,7 @@ const Panel = {
       p[S.cfg.panel_profile].touch = b.dataset.v;
       this.setProfiles(p);
       // the desktop gets the raw touches, so the tablet's own gestures go off (and back on with Shortcuts)
-      setKey("gestures", b.dataset.v !== "windows").then(refresh);
+      setKey("gestures", b.dataset.v === "shortcuts").then(refresh);
     };
     $("#profName").onchange = e => {
       const p = profs(), name = e.target.value.trim();
