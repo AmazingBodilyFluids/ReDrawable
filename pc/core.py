@@ -585,10 +585,13 @@ class Companion:
             with open(os.path.join(src, local), "rb") as f:
                 tab.run(f"cat > {self.REMOTE}/{name} && chmod 755 {self.REMOTE}/{name}", f.read())
         chan = tab.client.get_transport().open_session()
-        chan.exec_command(f"sh {self.REMOTE}/run.sh 2>&1")
+        # Patient (Wi-Fi): run.sh feeds the app its pings on the tablet and keeps the tablet
+        # and its Wi-Fi awake, so a stalled link never times the screen out.
+        chan.exec_command(f"{'PATIENT=1 ' if tab.patient else ''}sh {self.REMOTE}/run.sh 2>&1")
         self.chan = chan
         threading.Thread(target=self._read, args=(chan,), daemon=True).start()
-        threading.Thread(target=self._keepalive, args=(chan,), daemon=True).start()
+        if not tab.patient:
+            threading.Thread(target=self._keepalive, args=(chan,), daemon=True).start()
 
     def _read(self, chan):
         buf = b""
@@ -687,20 +690,22 @@ class Worker(threading.Thread):
             grabbed = None
             host = self.tab.host
             usb = host.startswith("10.11.99.")
-            checked = pinged = time.time()
+            checked = time.time()
             while not self.stop_flag.is_set():
                 if time.time() - checked > 1.0:
                     # A pulled cable never closes the TCP stream on this side; notice it from
                     # the network adapter going away instead of waiting for SSH timeouts.
                     checked = time.time()
-                    if (usb and not usb_link(host)) or not self.tab.client.get_transport().is_active():
+                    if usb and not usb_link(host):
+                        print("link: USB adapter gone", flush=True)
                         break
-                    # Over Wi-Fi a dropped network (or a sleeping tablet) leaves the TCP stream
-                    # hanging for minutes; an SSH round trip every few seconds notices it.
-                    if not usb and time.time() - pinged > 3:
-                        pinged = time.time()
-                        if not self.tab.alive(4):
-                            break
+                    if not self.tab.client.get_transport().is_active():
+                        print("link: SSH transport closed", flush=True)
+                        break
+                    # Over Wi-Fi no stretch of silence ends the session (see Tablet.patient): the
+                    # tablet's power saving stalls the link for seconds at a time, and a 4 s
+                    # deadline here dropped sessions every few minutes. Disconnect ends it, or the
+                    # tablet's power button.
                 want = e.want_grab()
                 if want != grabbed:  # (re)open the stream with or without the exclusive grab
                     if self.chan:
@@ -714,6 +719,10 @@ class Worker(threading.Thread):
                 except socket.timeout:
                     chunk = None
                 if chunk == b"":
+                    err = b""
+                    while self.chan.recv_stderr_ready():
+                        err += self.chan.recv_stderr(4096)
+                    print("link: pen stream ended", err.decode(errors="replace").strip(), flush=True)
                     break
                 if e.output_on and pen_out is None:
                     pen_out = e.make_pen()
@@ -1911,7 +1920,7 @@ class Engine:
                 # Over the cable the tablet is whatever is plugged in (a reset makes new host keys);
                 # over Wi-Fi only the tablet whose key was pinned on the cable is trusted.
                 tab = rt.Tablet(host, self.cfg["user"], None, keyfile=key,
-                                host_key=self.cfg["host_key"] if wifi else None)
+                                host_key=self.cfg["host_key"] if wifi else None, patient=wifi)
                 return tab, tab.install_helper()
             except paramiko.AuthenticationException as ex:
                 errors.append(ex)

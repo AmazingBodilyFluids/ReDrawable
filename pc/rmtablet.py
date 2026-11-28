@@ -45,7 +45,7 @@ BTN_TOOL_PEN, BTN_TOOL_RUBBER, BTN_TOUCH, BTN_STYLUS = 0x140, 0x141, 0x14A, 0x14
 class Tablet:
     """SSH session to the tablet plus the rmpp-pen helper."""
 
-    def __init__(self, host, user, password, port=22, keyfile=None, host_key=None):
+    def __init__(self, host, user, password, port=22, keyfile=None, host_key=None, patient=False):
         """host_key ("type base64", as server_key() gives it): only log in to the tablet with that
         SSH host key (for Wi-Fi, where another machine could answer at the address)."""
         import paramiko  # imported lazily so the unit tests run without it
@@ -61,7 +61,12 @@ class Tablet:
         self.client.connect(host, port=port, username=user, password=password,
                             key_filename=keyfile, look_for_keys=keyfile is None and password is None,
                             allow_agent=password is None, timeout=8, compress=False)
-        self.client.get_transport().set_keepalive(5)
+        # Patient (Wi-Fi): no stretch of silence ends the session. Nothing is sent while the
+        # tablet is quiet, because unanswered packets are what make the PC's TCP give up on a
+        # link that is only stalled (the tablet's Wi-Fi power saving pauses it for seconds).
+        self.patient = patient
+        if not patient:
+            self.client.get_transport().set_keepalive(5)
         self.helper = None
 
     def run(self, cmd, stdin_bytes=None):
@@ -103,6 +108,9 @@ class Tablet:
         pulled, PC asleep) it releases the pen on its own after a few seconds, because the
         tablet never hears that such a connection is gone."""
         chan = self.client.get_transport().open_session()
+        if self.patient:  # no deadline on the tablet either; EOF still stops the helper
+            chan.exec_command(f"{self.helper} stream {dev}{' grab' if grab else ''}")
+            return chan
         chan.exec_command(f"{self.helper} stream {dev}{' grab' if grab else ''} keepalive")
 
         def keepalive():
@@ -119,20 +127,6 @@ class Tablet:
     def server_key(self):
         k = self.client.get_transport().get_remote_server_key()
         return f"{k.get_name()} {k.get_base64()}"
-
-    def alive(self, timeout):
-        """True if the tablet answers an SSH round trip within `timeout` seconds."""
-        done = threading.Event()
-
-        def ping():
-            try:
-                self.client.get_transport().global_request("keepalive@redrawable", wait=True)
-            except Exception:
-                return
-            done.set()
-
-        threading.Thread(target=ping, daemon=True).start()
-        return done.wait(timeout)
 
     def close(self):
         self.client.close()

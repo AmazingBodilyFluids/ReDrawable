@@ -34,6 +34,7 @@ restore() {
         systemctl start xochitl || { sleep 2; systemctl reset-failed xochitl; systemctl start xochitl; }
     fi
     { echo rmpp-companion > /sys/power/wake_unlock; } 2>/dev/null
+    [ -s "$LOCK/power_save" ] && iw dev wlan0 set power_save "$(cat "$LOCK/power_save")" 2>/dev/null
     [ -s "$LOCK/light" ] && cat "$LOCK/light" > "$FL/brightness" 2>/dev/null
     [ -s "$LOCK/bl_power" ] && cat "$LOCK/bl_power" > "$FL/bl_power" 2>/dev/null
     rm -f "$DIR"/trace.* "$DIR"/mask*.png "$DIR"/thumb*.png
@@ -58,7 +59,25 @@ case "$(cat /sys/devices/soc0/machine 2>/dev/null)" in
     "reMarkable 2.0") export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS="${QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS:-rotate=180:invertx}" ;;
     "reMarkable 1.0"|"reMarkable Prototype 1") export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS="${QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS:-rotate=180}" ;;
 esac
-QT_QUICK_BACKEND=epaper "$DIR/rmpp-companion" -platform "${COMPANION_PLATFORM:-epaper}" "$@" <&3 2>&1 | tee -a "$LOG" &
+# PATIENT=1 (Wi-Fi): the PC sends no pings, so no stretch of silence on a stalled link ends the
+# session. This loop passes the PC's lines through whole and gives the app its ping every second
+# itself; EOF from the PC still ends it. Wi-Fi power saving, which stalls the link for seconds,
+# is off until restore() puts it back.
+feed() {
+    part=
+    while :; do
+        if IFS= read -r -t 1 l <&3; then printf '%s\n' "$part$l"; part=
+        elif [ $? -gt 128 ]; then part="$part$l"; echo ping
+        else break; fi
+    done
+}
+if [ -n "$PATIENT" ]; then
+    iw dev wlan0 get power_save 2>/dev/null | sed -n 's/.*: //p' > "$LOCK/power_save"
+    iw dev wlan0 set power_save off 2>/dev/null
+    feed | QT_QUICK_BACKEND=epaper "$DIR/rmpp-companion" -platform "${COMPANION_PLATFORM:-epaper}" "$@" 2>&1 | tee -a "$LOG" &
+else
+    QT_QUICK_BACKEND=epaper "$DIR/rmpp-companion" -platform "${COMPANION_PLATFORM:-epaper}" "$@" <&3 2>&1 | tee -a "$LOG" &
+fi
 APP=$!
 wait "$APP"
 echo "companion: app exited" | tee -a "$LOG"
