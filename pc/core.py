@@ -719,10 +719,11 @@ class Worker(threading.Thread):
                 except socket.timeout:
                     chunk = None
                 if chunk == b"":
-                    err = b""
-                    while self.chan.recv_stderr_ready():
-                        err += self.chan.recv_stderr(4096)
-                    print("link: pen stream ended", err.decode(errors="replace").strip(), flush=True)
+                    if not self.stop_flag.is_set():  # not our own Disconnect closing it
+                        err = b""
+                        while self.chan.recv_stderr_ready():
+                            err += self.chan.recv_stderr(4096)
+                        print("link: pen stream ended", err.decode(errors="replace").strip(), flush=True)
                     break
                 if e.output_on and pen_out is None:
                     pen_out = e.make_pen()
