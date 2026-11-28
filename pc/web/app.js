@@ -108,6 +108,8 @@ function status() {
 // ------------------------------------------------------------------ render
 
 // The status bar: the tablet, how it is connected, and what needs doing (with the button for it).
+function smoothText(v) { v = +v || 0; return v ? Math.round(v * 100) + "%" : "Off"; }
+
 function statusBar(s) {
   const uncal = S.connected && !S.calibrating && !S.calibration;
   $("#sbDot").className = "dot " + (S.connected && (uncal || !S.output) ? "warn" : s.dot);
@@ -176,6 +178,13 @@ function render() {
   }
   $("#gammaV").textContent = (+S.cfg.gamma).toFixed(2);
   $("#threshV").textContent = Math.round(S.cfg.threshold * 100) + "%";
+  $("#smoothV").textContent = smoothText(S.cfg.pressure_smooth);
+  $("#tpSpeedV").textContent = (+S.cfg.touchpad_speed).toFixed(1) + "×";
+  $("#tpSpeedRow").hidden = S.touch_mode !== "touchpad";
+  const pr = S.pen_rate;
+  $("#rateText").textContent = pr && pr.tablet ? [`Pen ${pr.tablet} Hz`, pr.pc ? `PC ${pr.pc} Hz` : "",
+    pr.per_read ? `${pr.per_read} / ${pr.per_read_max} per read` : "", pr.wait_ms != null ? `wait ≤ ${pr.wait_ms} ms` : ""].filter(Boolean).join(" · ")
+    : "Draw a few fast strokes to measure";
   $("#paperV").textContent = (+S.cfg.paper_mm).toFixed(1).replace(/\.0$/, "") + " mm";
   $("#traceV").textContent = Math.round(S.cfg.trace_opacity * 100) + "%";
   renderTraces();
@@ -280,6 +289,8 @@ document.addEventListener("input", e => {
     if (el.dataset.key === "mask_strength") { $("#maskStrV").textContent = Math.round(v * 100) + "%"; Scr.draw(); }
     if (el.dataset.key === "gamma") $("#gammaV").textContent = v.toFixed(2);
     if (el.dataset.key === "threshold") $("#threshV").textContent = Math.round(v * 100) + "%";
+    if (el.dataset.key === "pressure_smooth") $("#smoothV").textContent = smoothText(v);
+    if (el.dataset.key === "touchpad_speed") $("#tpSpeedV").textContent = v.toFixed(1) + "×";
     drawCurve();
     clearTimeout(el._t);
     el._t = setTimeout(() => api().set(el.dataset.key, v), 120);
@@ -569,7 +580,7 @@ function gestureText() {
   const n = t ? t.pts.length : 0;
   let g = GESTURES[a] || (a.startsWith("tap ") ? `${a.split(" ")[1]}-finger tap ×${a.split(" ")[2]}` : a.startsWith("press ") ? "panel button" : "");
   if (t && n && !t.live) g = `${n} finger${n > 1 ? "s" : ""} muted (pen near or palm)`;
-  else if (n && !g) g = `${n} finger${n > 1 ? "s" : ""} down` + (S.touch_mode === "windows" ? `, sent to ${OSDESK()} as touch` : "");
+  else if (n && !g) g = `${n} finger${n > 1 ? "s" : ""} down` + (S.touch_mode === "windows" ? `, sent to ${OSDESK()} as touch` : S.touch_mode === "touchpad" ? ", touchpad" : "");
   if (t && t.palms) g += (g ? " · " : "") + `${t.palms} palm contact${t.palms > 1 ? "s" : ""} ignored`;
   return g;
 }
@@ -635,8 +646,9 @@ const Duck = {
   // what the caption says when no gesture is showing
   idle() {
     if (!S.connected) return "Connect the tablet to try the gestures";
-    if (S.cfg.gestures === false) return "Finger gestures are off";
+    if (S.cfg.gestures === false && S.touch_mode === "shortcuts") return "Finger gestures are off";
     if (S.touch_mode === "windows") return `Fingers go to ${OSDESK()} as touch`;
+    if (S.touch_mode === "touchpad") return "Fingers work as a touchpad";
     return "";
   },
   canvas(cls) {
@@ -1518,7 +1530,7 @@ const Panel = {
       p[S.cfg.panel_profile].touch = b.dataset.v;
       this.setProfiles(p);
       // the desktop gets the raw touches, so the tablet's own gestures go off (and back on with Shortcuts)
-      setKey("gestures", b.dataset.v !== "windows").then(refresh);
+      setKey("gestures", b.dataset.v === "shortcuts").then(refresh);
     };
     $("#profName").onchange = e => {
       const p = profs(), name = e.target.value.trim();
